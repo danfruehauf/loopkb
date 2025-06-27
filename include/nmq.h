@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #include <assert.h>
 #include <string.h>
@@ -69,6 +70,7 @@ struct ring
 struct context_t
 {
 	void* p_;
+	size_t size_;
 	struct header* header_;
 	struct ring* ring_;
 	char* data_;
@@ -99,6 +101,7 @@ struct context_t* context_create(struct context_t* context_, const char* fname, 
 	if (context_->p_ == NULL)
 		return NULL;
 
+	close(fd);
 	memset(context_->p_, 0, file_size);
 
 	context_->header_ = (struct header*) context_->p_;
@@ -131,6 +134,7 @@ struct context_t* context_open(struct context_t* context_, const char* fname, un
 		return NULL;
 
 	unsigned int file_size = buf.st_size;
+	context_->size_ = file_size;
 
 	if (ftruncate(fd, file_size) == -1)
 		return NULL;
@@ -144,6 +148,11 @@ struct context_t* context_open(struct context_t* context_, const char* fname, un
 	context_->data_ = (char*) (context_->ring_ + context_->header_->rings);
 
 	return context_;
+}
+
+void context_destroy(struct context_t* context_)
+{
+	munmap(context_->p_, context_->size_);
 }
 
 void context_print(struct context_t* context_)
