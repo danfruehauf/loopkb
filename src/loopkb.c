@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "loopkb.h"
+#include "nmq.h"
 
 #define VISIBILITY_DEFAULT __attribute__((__visibility__("default")))
 
