@@ -221,6 +221,14 @@ bool context_sendnb(struct context_t* context_, unsigned int from, unsigned int 
 	return context_send_ring(context_, ring, msg, size);
 }
 
+bool context_can_send(struct context_t* context_, unsigned int from, unsigned int to)
+{
+	struct ring *ring = context_get_ring(context_, from, to);
+	const unsigned int h = (ring->_head - 1) & ring->_size;
+	const unsigned int t = ring->_tail;
+	return t != h;
+}
+
 bool context_recv_ring(struct context_t* context_, struct ring *ring, void* msg, size_t* size)
 {
 	unsigned int t = ring->_tail;
@@ -256,28 +264,12 @@ bool context_recvnb(struct context_t* context_, unsigned int from, unsigned int 
 	return context_recv_ring(context_, context_get_ring(context_, from, to), s, size);
 }
 
-bool context_recv_to(struct context_t* context_, unsigned int to, void* msg, size_t* size)
+bool context_can_recv(struct context_t* context_, unsigned int from, unsigned int to)
 {
-	// TODO "fair" receiving
-	while (true)
-	{
-		for (unsigned int i = 0; i < context_->header_->nodes; i++)
-		{
-			if (to != i && context_recvnb(context_, i, to, msg, size)) return true;
-		}
-		__relax();
-	}
-	return false;
-}
-
-ssize_t context_recvnb_to(struct context_t* context_, unsigned int to, void* msg, size_t* size)
-{
-	// TODO "fair" receiving
-	for (unsigned int i = 0; i < context_->header_->nodes; i++)
-	{
-		if (to != i && context_recvnb(context_, i, to, msg, size)) return true;
-	}
-	return false;
+	const struct ring *ring = context_get_ring(context_, from, to);
+	const unsigned int t = ring->_tail;
+	const unsigned int h = ring->_head;
+	return h != t;
 }
 
 struct node_t
@@ -303,6 +295,11 @@ bool node_sendnb(struct node_t* node_, unsigned int to, const void* msg, size_t 
 	return context_sendnb(node_->context_, node_->node_, to, msg, size);
 }
 
+bool node_can_send(struct node_t* node_, unsigned int to)
+{
+	return context_can_send(node_->context_, node_->node_, to);
+}
+
 bool node_recv(struct node_t* node_, unsigned int from, void* msg, size_t* size)
 {
 	return context_recv(node_->context_, from, node_->node_, msg, size);
@@ -313,12 +310,7 @@ bool node_recvnb(struct node_t* node_, unsigned int from, void* msg, size_t* siz
 	return context_recvnb(node_->context_, from, node_->node_, msg, size);
 }
 
-bool node_recv_to(struct node_t* node_, void* msg, size_t* size)
+bool node_can_recv(struct node_t* node_, unsigned int from)
 {
-	return context_recv_to(node_->context_, node_->node_, msg, size);
-}
-
-bool node_recvnb_to(struct node_t* node_, void* msg, size_t* size)
-{
-	return context_recvnb_to(node_->context_, node_->node_, msg, size);
+	return context_can_recv(node_->context_, from, node_->node_);
 }
