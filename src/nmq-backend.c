@@ -9,6 +9,7 @@
 #include "log.h"
 #include "nmq-backend.h"
 #include "nmq.h"
+#include "util.h"
 
 #define MAX_SOCKET_FILE_MAPPING 1024
 #define PACKET_SIZE 1500
@@ -381,6 +382,18 @@ bool _loopkb_nmq_should_offload_socket(int sockfd, const struct socket_info_t* s
 	return false;
 }
 
+bool _loopkb_nmq_can_send(int sockfd)
+{
+	const unsigned int ring_to = socket_file_map[sockfd].node_data->node_ == server_to_client_data ? client_to_server_data : server_to_client_data;
+	return node_can_send(socket_file_map[sockfd].node_data, ring_to);
+}
+
+bool _loopkb_nmq_can_receive(int sockfd)
+{
+	const unsigned int ring_from = socket_file_map[sockfd].node_data->node_ == server_to_client_data ? client_to_server_data : server_to_client_data;
+	return node_can_recv(socket_file_map[sockfd].node_data, ring_from);
+}
+
 int _loopkb_nmq_check_socket(int sockfd, int direction)
 {
 	struct socket_info_t socket_info;
@@ -511,6 +524,7 @@ ssize_t _loopkb_nmq_send(int sockfd, const void* buf, size_t len, int flags, con
 	{
 		// Blocking...
 		const unsigned int ring_to = socket_file_map[sockfd].node_data->node_ == server_to_client_data ? client_to_server_data : server_to_client_data;
+		__loopkb_log(log_level_debug, "_loopkb_nmq_send: Socket %d sending %zu bytes (from %u to %u)", sockfd, len, socket_file_map[sockfd].node_data->node_, ring_to);
 		node_send(socket_file_map[sockfd].node_data, ring_to, buf, len);
 		return len;
 	}
@@ -519,10 +533,28 @@ ssize_t _loopkb_nmq_send(int sockfd, const void* buf, size_t len, int flags, con
 	return -1;
 }
 
+int merge_fds(fd_set* fdset1, const fd_set* fdset2)
+{
+	if (fdset2 == NULL || fdset1 == NULL)
+	{
+		return 0;
+	}
+
+	int retval = 0;
+	for (int i = 0; i < FD_SETSIZE; ++i)
+	{
+		if (FD_ISSET(i, fdset2))
+		{
+			FD_SET(i, fdset1);
+			++retval;
+		}
+	}
+	return retval;
+}
+
 int _loopkb_nmq_select(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, struct timeval *restrict timeout)
 {
 	__loopkb_log(log_level_trace, "_loopkb_nmq_select: %d", nfds);
-	int offloaded_sockets = 0;
 
 	static select_function_t _sys_select = NULL;
 	if (_sys_select == NULL)
@@ -533,11 +565,155 @@ int _loopkb_nmq_select(int nfds, fd_set *restrict readfds, fd_set *restrict writ
 #pragma GCC diagnostic pop
 	}
 
+	int offloaded_sockets = 0;
+	int total_fd_count = 0;
+
+	for (int i = 0; i < FD_SETSIZE; ++i)
+	{
+		if ((readfds != NULL && FD_ISSET(i, readfds)) ||
+				(writefds != NULL && FD_ISSET(i, writefds)) ||
+				(exceptfds != NULL && FD_ISSET(i, exceptfds)))
+		{
+			if (_loopkb_nmq_is_offloaded_socket(i))
+			{
+				++offloaded_sockets;
+			}
+
+			++total_fd_count;
+		}
+	}
+
+	__loopkb_log(log_level_debug, "_loopkb_nmq_select: select() on %d fds, out of them %d are offloaded\n", total_fd_count, offloaded_sockets);
+
 	if (offloaded_sockets == 0)
 	{
 		__loopkb_log(log_level_info, "_loopkb_nmq_select: Returning _sys_select - no offloaded sockets");
 		return _sys_select(nfds, readfds, writefds, exceptfds, timeout);
 	}
 
-	return _sys_select(nfds, readfds, writefds, exceptfds, timeout);
+	fd_set retval_readfds;
+	fd_set retval_writefds;
+	fd_set retval_exceptfds;
+	FD_ZERO(&retval_readfds);
+	FD_ZERO(&retval_writefds);
+	FD_ZERO(&retval_exceptfds);
+
+	fd_set select_readfds_tmp;
+	fd_set select_writefds_tmp;
+	fd_set select_exceptfds_tmp;
+
+	__int64_t now_us = system_clock_us();
+	__int64_t timeout_us = 0;
+	if (NULL != timeout)
+	{
+		timeout_us = timeout->tv_sec * 1e6 + timeout->tv_usec;
+	}
+	const __int64_t finish_us = now_us + timeout_us;
+
+	struct timeval sys_select_1_us;
+	sys_select_1_us.tv_sec = 0;
+	sys_select_1_us.tv_usec = 1;
+
+	bool has_data = false;
+
+	do
+	{
+		fd_set* sys_select_readfds = NULL;
+		if (readfds != NULL)
+		{
+			sys_select_readfds = &select_readfds_tmp;
+			memcpy(&select_readfds_tmp, readfds, sizeof(fd_set));
+		}
+
+		fd_set* sys_select_writefds = NULL;
+		if (writefds != NULL)
+		{
+			sys_select_writefds = &select_writefds_tmp;
+			memcpy(&select_writefds_tmp, writefds, sizeof(fd_set));
+		}
+
+		fd_set* sys_select_exceptfds = NULL;
+		if (exceptfds != NULL)
+		{
+			sys_select_exceptfds = &select_exceptfds_tmp;
+			memcpy(&select_exceptfds_tmp, exceptfds, sizeof(fd_set));
+		}
+
+		int sys_select_retval = _sys_select(nfds, sys_select_readfds, sys_select_writefds, sys_select_exceptfds, &sys_select_1_us);
+		if (sys_select_retval > 0)
+		{
+			merge_fds(&retval_readfds, sys_select_readfds);
+			merge_fds(&retval_writefds, sys_select_writefds);
+			merge_fds(&retval_exceptfds, sys_select_exceptfds);
+			has_data = true;
+		}
+
+		for (int i = 0; i < FD_SETSIZE; ++i)
+		{
+			if (_loopkb_nmq_is_offloaded_socket(i))
+			{
+				if ((readfds != NULL && FD_ISSET(i, readfds) && _loopkb_nmq_can_receive(i)))
+				{
+					FD_SET(i, &retval_readfds);
+					has_data = true;
+				}
+
+				if ((writefds != NULL && FD_ISSET(i, writefds) && _loopkb_nmq_can_send(i)))
+				{
+					FD_SET(i, &retval_writefds);
+					has_data = true;
+				}
+
+				// TODO Implement!
+				//if ((exceptfds != NULL && FD_ISSET(i, writefds) && _loopkb_nmq_can_send(i)))
+				//{
+				//	FD_SET(i, &retval_exceptfds);
+				//}
+			}
+		}
+
+		if (has_data)
+		{
+			break;
+		}
+
+		now_us = system_clock_us();
+	}
+	while (timeout_us <= 0 || now_us <= finish_us);
+
+	if (NULL != readfds)
+	{
+		memcpy(readfds, &retval_readfds, sizeof(fd_set));
+	}
+
+	if (NULL != writefds)
+	{
+		memcpy(writefds, &retval_writefds, sizeof(fd_set));
+	}
+
+	if (NULL != exceptfds)
+	{
+		memcpy(exceptfds, &retval_exceptfds, sizeof(fd_set));
+	}
+
+	int retval = 0;
+	for (int i = 0; i < FD_SETSIZE; ++i)
+	{
+		if (readfds != NULL && FD_ISSET(i, readfds))
+		{
+			++retval;
+		}
+
+		if (writefds != NULL && FD_ISSET(i, writefds))
+		{
+			++retval;
+		}
+
+		if (exceptfds != NULL && FD_ISSET(i, exceptfds))
+		{
+			++retval;
+		}
+	}
+
+	return retval;
 }
