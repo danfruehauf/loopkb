@@ -56,3 +56,15 @@ ssize_t _loopkb_sendmsg(int sockfd, const struct msghdr *msg, int flags);
 ssize_t _loopkb_recv(int sockfd, void* buf, size_t len, int flags);
 ssize_t _loopkb_recvfrom(int sockfd, void* buf, size_t len, int flags, struct sockaddr *restrict src_addr, socklen_t *restrict addrlen);
 ssize_t _loopkb_recvmsg(int sockfd, struct msghdr *msg, int flags);
+
+extern socket_function_t _sys_socket;
+extern connect_function_t _sys_connect;
+extern accept_function_t _sys_accept;
+extern close_function_t _sys_close;
+extern select_function_t _sys_select;
+extern send_function_t _sys_send;
+extern sendto_function_t _sys_sendto;
+extern sendmsg_function_t _sys_sendmsg;
+extern recv_function_t _sys_recv;
+extern recvfrom_function_t _sys_recvfrom;
+extern recvmsg_function_t _sys_recvmsg;

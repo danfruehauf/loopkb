@@ -27,6 +27,7 @@
 #include <unistd.h>
 
 #include "log.h"
+#include "loopkb.h"
 #include "nmq-backend.h"
 #include "nmq.h"
 #include "util.h"
@@ -614,15 +615,6 @@ int merge_fds(fd_set* fdset1, const fd_set* fdset2)
 int _loopkb_nmq_select(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, struct timeval *restrict timeout)
 {
 	__loopkb_log(log_level_trace, "_loopkb_nmq_select: %d", nfds);
-
-	static select_function_t _sys_select = NULL;
-	if (_sys_select == NULL)
-	{
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-		_sys_select = (select_function_t) dlsym(RTLD_NEXT, "select");
-#pragma GCC diagnostic pop
-	}
 
 	int offloaded_sockets = 0;
 	int total_fd_count = 0;
