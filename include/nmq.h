@@ -1,5 +1,6 @@
 /*
     Copyright (C) 2010 Erik Rigtorp <erik@rigtorp.com>.
+    Copyright (C) 2025 Dan Fruehauf <malkodan@gmail.com>.
     All rights reserved.
 
     This file is part of NanoMQ.
