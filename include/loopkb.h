@@ -24,8 +24,6 @@
 #include <sys/select.h>
 #include <time.h>
 
-extern int loopkb_debug;
-
 // Basic function
 typedef int (*socket_function_t)(int, int, int);
 typedef int (*connect_function_t)(int, const struct sockaddr* addr, socklen_t addrlen);
@@ -57,6 +55,11 @@ ssize_t _loopkb_recv(int sockfd, void* buf, size_t len, int flags);
 ssize_t _loopkb_recvfrom(int sockfd, void* buf, size_t len, int flags, struct sockaddr *restrict src_addr, socklen_t *restrict addrlen);
 ssize_t _loopkb_recvmsg(int sockfd, struct msghdr *msg, int flags);
 
+// Configuration variables
+extern size_t loopkb_ring_size;
+extern size_t loopkb_packet_size;
+
+// Override functions
 extern socket_function_t _sys_socket;
 extern connect_function_t _sys_connect;
 extern accept_function_t _sys_accept;

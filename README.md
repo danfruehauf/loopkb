@@ -33,9 +33,11 @@ AMD Ryzen 7 PRO 8840U:
  * With libloopkb: percentile 50.000 = 0.391us
 
 # Environment Variables
-| Name         | Default Value | Description                                   |
-|--------------|---------------|-----------------------------------------------|
-| LOOPKB_DEBUG | unset         | If set to 1, spews some debugging information |
+| Name               | Default Value | Description                                   |
+|--------------------|---------------|-----------------------------------------------|
+| LOOPKB_DEBUG       | unset         | If set to 1, spews some debugging information |
+| LOOPKB_RING_SIZE   | 15            | Number of items in each ring buffer           |
+| LOOPKB_PACKET_SIZE | 1500          | Mam item size in each ring buffer             |
 
 ## TODO
 Lots, to begin with. But here is a partial list:
@@ -45,7 +47,6 @@ Lots, to begin with. But here is a partial list:
  * Allow for non-bound UDP sockets (sendto(), recvfrom())
  * Add more configuration via environment variables, like:
    * Directory to keep ring buffers files in
-   * Sizes of ring buffers
    * Sockets/endpoints to offload
  * Better cleanup of artifact files
  * Reduce footprint of various data structures

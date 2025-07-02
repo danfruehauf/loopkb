@@ -32,6 +32,9 @@
 
 #define VISIBILITY_DEFAULT __attribute__((__visibility__("default")))
 
+size_t loopkb_ring_size = 15;
+size_t loopkb_packet_size = 1500;
+
 socket_function_t _sys_socket = NULL;
 connect_function_t _sys_connect = NULL;
 accept_function_t _sys_accept = NULL;
@@ -63,6 +66,16 @@ static void _loopkb_init()
 	{
 		loopkb_log_level_stdout = log_level_debug;
 		loopkb_log_level_stderr = log_level_debug;
+	}
+
+	if (getenv("LOOPKB_RING_SIZE") != NULL)
+	{
+		loopkb_ring_size = atoi(getenv("LOOPKB_RING_SIZE"));
+	}
+
+	if (getenv("LOOPKB_PACKET_SIZE") != NULL)
+	{
+		loopkb_packet_size = atoi(getenv("LOOPKB_PACKET_SIZE"));
 	}
 
 	OVERRIDE_FUNCTION(socket_function_t, socket, _sys_socket);

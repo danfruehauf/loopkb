@@ -33,8 +33,6 @@
 #include "util.h"
 
 #define MAX_SOCKET_FILE_MAPPING 1024
-#define PACKET_SIZE 1500
-#define RING_SIZE 15
 #define LOOPKB_FILE_PREFIX "_loopkb_"
 
 // Max filename length will be _loopkb_{FAMILY}.{PROTO}:{INET6_ADDRSTRLEN}:{PORT}:{INET6_ADDRSTRLEN}:{PORT}
@@ -285,7 +283,7 @@ void _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_i
 	if (direction == 0)
 	{
 		__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: context_create");
-		if (context_create(socket_file_map[sockfd].context, socket_file_map[sockfd].filename, total_channels, RING_SIZE, PACKET_SIZE) == NULL)
+		if (context_create(socket_file_map[sockfd].context, socket_file_map[sockfd].filename, total_channels, loopkb_ring_size, loopkb_packet_size) == NULL)
 		{
 			__loopkb_log(log_level_error, "_loopkb_nmq_add_offloaded_socket: Error creating context %s", strerror(errno));
 			socket_file_map[sockfd].sock = sockfd;
@@ -304,7 +302,7 @@ void _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_i
 		}
 		close(fd);
 
-		if (context_open(socket_file_map[sockfd].context, socket_file_map[sockfd].filename, 2, RING_SIZE, PACKET_SIZE) == NULL)
+		if (context_open(socket_file_map[sockfd].context, socket_file_map[sockfd].filename, 2, loopkb_ring_size, loopkb_packet_size) == NULL)
 		{
 			__loopkb_log(log_level_error, "_loopkb_nmq_add_offloaded_socket: Cannot open context %s: %s", socket_file_map[sockfd].filename, strerror(errno));
 			socket_file_map[sockfd].sock = sockfd;
@@ -473,9 +471,9 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 		_loopkb_nmq_check_socket(sockfd, 0);
 	}*/
 
-	char receive_buffer_tmp[PACKET_SIZE];
+	char receive_buffer_tmp[loopkb_packet_size];
 	void* receive_buffer = buf;
-	if (len < PACKET_SIZE)
+	if (len < loopkb_packet_size)
 	{
 		// When the given buffer is too small, perform a receive to a temporary buffer
 		receive_buffer = receive_buffer_tmp;
@@ -487,10 +485,10 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 		const unsigned int ring_from_control = socket_file_map[sockfd].node_control->node_ == server_to_client_control ? client_to_server_control : server_to_client_control;
 		int flags = fcntl(sockfd, F_GETFL, 0);
 
-		size_t receive_len = PACKET_SIZE;
+		size_t receive_len = loopkb_packet_size;
 		if (flags & SOCK_NONBLOCK)
 		{
-			receive_len = PACKET_SIZE;
+			receive_len = loopkb_packet_size;
 			if (node_recvnb(socket_file_map[sockfd].node_control, ring_from_control, buf, &receive_len))
 			{
 				if (receive_len == sizeof(eof) && memcmp(buf, eof, sizeof(eof)))
@@ -500,7 +498,7 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 			}
 
 			// Non blocking
-			receive_len = PACKET_SIZE;
+			receive_len = loopkb_packet_size;
 			if (node_recvnb(socket_file_map[sockfd].node_data, ring_from, buf, &receive_len))
 			{
 				len = (len < receive_len) ? len : receive_len;
@@ -525,7 +523,7 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 			while (receive_len == 0)
 			{
 				// Blocking
-				receive_len = PACKET_SIZE;
+				receive_len = loopkb_packet_size;
 				if (node_recvnb(socket_file_map[sockfd].node_data, ring_from, receive_buffer, &receive_len))
 				{
 					len = (len < receive_len) ? len : receive_len;
@@ -537,7 +535,7 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 					return len;
 				}
 
-				receive_len = PACKET_SIZE;
+				receive_len = loopkb_packet_size;
 				if (node_recvnb(socket_file_map[sockfd].node_control, ring_from_control, receive_buffer, &receive_len))
 				{
 					if (receive_len == sizeof(eof) && memcmp(receive_buffer, eof, sizeof(eof)) == 0)
@@ -575,7 +573,7 @@ ssize_t _loopkb_nmq_send(int sockfd, const void* buf, size_t len, int flags, con
 		{
 			if (node_sendnb(socket_file_map[sockfd].node_data, ring_to, buf, len))
 			{
-				return len > PACKET_SIZE ? PACKET_SIZE : len;
+				return len > loopkb_packet_size ? loopkb_packet_size : len;
 			}
 
 			errno = EAGAIN;
@@ -585,7 +583,7 @@ ssize_t _loopkb_nmq_send(int sockfd, const void* buf, size_t len, int flags, con
 		{
 			// Blocking
 			node_send(socket_file_map[sockfd].node_data, ring_to, buf, len);
-			return len > PACKET_SIZE ? PACKET_SIZE : len;
+			return len > loopkb_packet_size ? loopkb_packet_size : len;
 		}
 	}
 
