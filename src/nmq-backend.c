@@ -452,8 +452,13 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 		_loopkb_nmq_check_socket(sockfd, 0);
 	}*/
 
-	// TODO unsupported size that is smaller than PACKET_SIZE, which is the ring buffer size
-	assert(len >= PACKET_SIZE);
+	char receive_buffer_tmp[PACKET_SIZE];
+	void* receive_buffer = buf;
+	if (len < PACKET_SIZE)
+	{
+		// When the given buffer is too small, perform a receive to a temporary buffer
+		receive_buffer = receive_buffer_tmp;
+	}
 
 	if (_loopkb_nmq_is_offloaded_socket(sockfd))
 	{
@@ -461,20 +466,29 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 		const unsigned int ring_from_control = socket_file_map[sockfd].node_control->node_ == server_to_client_control ? client_to_server_control : server_to_client_control;
 		int flags = fcntl(sockfd, F_GETFL, 0);
 
+		size_t receive_len = PACKET_SIZE;
 		if (flags & SOCK_NONBLOCK)
 		{
-			if (node_recvnb(socket_file_map[sockfd].node_control, ring_from_control, buf, &len))
+			receive_len = PACKET_SIZE;
+			if (node_recvnb(socket_file_map[sockfd].node_control, ring_from_control, buf, &receive_len))
 			{
-				if (len == sizeof(eof) && memcmp(buf, eof, sizeof(eof)))
+				if (receive_len == sizeof(eof) && memcmp(buf, eof, sizeof(eof)))
 				{
 					return -1;
 				}
 			}
 
 			// Non blocking
-			if (node_recvnb(socket_file_map[sockfd].node_data, ring_from, buf, &len))
+			receive_len = PACKET_SIZE;
+			if (node_recvnb(socket_file_map[sockfd].node_data, ring_from, buf, &receive_len))
 			{
-				//printf("Received non block %lu\n", len);
+				len = (len < receive_len) ? len : receive_len;
+				if (receive_buffer != buf)
+				{
+					// TODO packet can be truncated!
+					memcpy(buf, receive_buffer, len);
+				}
+				//printf("Received non block %lu\n", receive_len);
 				return len;
 			}
 			else
@@ -486,23 +500,32 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 		}
 		else
 		{
-			len = 0;
-			while (len == 0)
+			receive_len = 0;
+			while (receive_len == 0)
 			{
 				// Blocking
-				if (node_recvnb(socket_file_map[sockfd].node_data, ring_from, buf, &len))
+				receive_len = PACKET_SIZE;
+				if (node_recvnb(socket_file_map[sockfd].node_data, ring_from, receive_buffer, &receive_len))
 				{
+					len = (len < receive_len) ? len : receive_len;
+					if (receive_buffer != buf)
+					{
+						// TODO packet can be truncated!
+						memcpy(buf, receive_buffer, len);
+					}
 					return len;
 				}
 
-				if (node_recvnb(socket_file_map[sockfd].node_control, ring_from_control, buf, &len))
+				receive_len = PACKET_SIZE;
+				if (node_recvnb(socket_file_map[sockfd].node_control, ring_from_control, receive_buffer, &receive_len))
 				{
-					if (len == sizeof(eof) && memcmp(buf, eof, sizeof(eof)))
+					if (receive_len == sizeof(eof) && memcmp(receive_buffer, eof, sizeof(eof)) == 0)
 					{
 						return -1;
 					}
 				}
 
+				receive_len = 0;
 				__relax();
 			}
 		}
