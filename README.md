@@ -29,8 +29,8 @@ $ LD_PRELOAD=build/libloopkb.so sockperf ping-pong --addr 127.0.0.1 --tcp --burs
 
 ## Performance
 AMD Ryzen 7 PRO 8840U:
- * Without libloopkb: percentile 50.000 = 10.584
- * With libloopkb: percentile 50.000 = 0.391
+ * Without libloopkb: percentile 50.000 = 10.584us
+ * With libloopkb: percentile 50.000 = 0.391us
 
 # Environment Variables
 | Name         | Default Value | Description                                   |
