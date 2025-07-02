@@ -565,11 +565,27 @@ ssize_t _loopkb_nmq_send(int sockfd, const void* buf, size_t len, int flags, con
 
 	if (_loopkb_nmq_is_offloaded_socket(sockfd))
 	{
-		// Blocking...
+		int flags = fcntl(sockfd, F_GETFL, 0);
+
 		const unsigned int ring_to = socket_file_map[sockfd].node_data->node_ == server_to_client_data ? client_to_server_data : server_to_client_data;
 		__loopkb_log(log_level_debug, "_loopkb_nmq_send: Socket %d sending %zu bytes (from %u to %u)", sockfd, len, socket_file_map[sockfd].node_data->node_, ring_to);
-		node_send(socket_file_map[sockfd].node_data, ring_to, buf, len);
-		return len;
+
+		if (flags & SOCK_NONBLOCK)
+		{
+			if (node_sendnb(socket_file_map[sockfd].node_data, ring_to, buf, len))
+			{
+				return len > PACKET_SIZE ? PACKET_SIZE : len;
+			}
+
+			errno = EAGAIN;
+			return 0;
+		}
+		else
+		{
+			// Blocking
+			node_send(socket_file_map[sockfd].node_data, ring_to, buf, len);
+			return len > PACKET_SIZE ? PACKET_SIZE : len;
+		}
 	}
 
 	// Not offloaded

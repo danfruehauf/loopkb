@@ -173,8 +173,8 @@ ssize_t _loopkb_send(int sockfd, const void* buf, size_t len, int flags)
 #pragma GCC diagnostic pop
 	}
 
-	ssize_t offload_send_retval = _loopkb_nmq_send(sockfd, buf, len, flags, NULL, 0);
-	if (offload_send_retval != -1)
+	const ssize_t offload_send_retval = _loopkb_nmq_send(sockfd, buf, len, flags, NULL, 0);
+	if (offload_send_retval >= 0)
 	{
 		return offload_send_retval;
 	}
@@ -192,7 +192,11 @@ ssize_t _loopkb_sendto(int sockfd, const void* buf, size_t len, int flags, const
 #pragma GCC diagnostic pop
 	}
 
-	_loopkb_nmq_send(sockfd, buf, len, flags, dest_addr, addrlen);
+	const ssize_t offload_send_retval = _loopkb_nmq_send(sockfd, buf, len, flags, dest_addr, addrlen);
+	if (offload_send_retval >= 0)
+	{
+		return offload_send_retval;
+	}
 	return _sys_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 }
 
@@ -221,8 +225,8 @@ ssize_t _loopkb_recv(int sockfd, void* buf, size_t len, int flags)
 #pragma GCC diagnostic pop
 	}
 
-	ssize_t offload_recv_retval = _loopkb_nmq_receive(sockfd, buf, len, flags, NULL, 0);
-	if (offload_recv_retval != -1)
+	const ssize_t offload_recv_retval = _loopkb_nmq_receive(sockfd, buf, len, flags, NULL, 0);
+	if (offload_recv_retval >= 0)
 	{
 		return offload_recv_retval;
 	}
@@ -241,8 +245,8 @@ ssize_t _loopkb_recvfrom(int sockfd, void* buf, size_t len, int flags, struct so
 #pragma GCC diagnostic pop
 	}
 
-	ssize_t offload_recv_retval = _loopkb_nmq_receive(sockfd, buf, len, flags, src_addr, addrlen);
-	if (offload_recv_retval > 0)
+	const ssize_t offload_recv_retval = _loopkb_nmq_receive(sockfd, buf, len, flags, src_addr, addrlen);
+	if (offload_recv_retval >= 0)
 	{
 		return offload_recv_retval;
 	}

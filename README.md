@@ -2,9 +2,9 @@
 Kernel Bypass for loopback communications.
 
 Started as a toy project, after realising Kernel Bypass libraries have no loopback acceleration:
- * libvma - No
- * exasock - No
- * onload - Claims to have, never got it to run
+ * libvma - No support
+ * exasock - No support
+ * onload - Claims to have support, but never worked for me
 
 Message passing powered by Erik Rigtorp's [nanomq](https://github.com/rigtorp/nanomq).
 
@@ -24,12 +24,18 @@ $ LD_PRELOAD=build/libloopkb.so sockperf server --addr 127.0.0.1 --tcp
 
 Client:
 ```
-$ LD_PRELOAD=build/libloopkb.so sockperf ping-pong --addr 127.0.0.1 --tcp
+$ LD_PRELOAD=build/libloopkb.so sockperf ping-pong --addr 127.0.0.1 --tcp --burst 2
 ```
 
 ## Performance
- * Without libloopkb: percentile 50.000 = 6.266
- * With libloopkb: percentile 50.000 = 1.993
+AMD Ryzen 7 PRO 8840U:
+ * Without libloopkb: percentile 50.000 = 10.584
+ * With libloopkb: percentile 50.000 = 0.391
+
+# Environment Variables
+| Name         | Default Value | Description                                   |
+|--------------|---------------|-----------------------------------------------|
+| LOOPKB_DEBUG | unset         | If set to 1, spews some debugging information |
 
 ## TODO
 Lots, to begin with. But here is a partial list:
