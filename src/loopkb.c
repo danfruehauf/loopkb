@@ -34,6 +34,7 @@
 
 size_t loopkb_ring_size = 15;
 size_t loopkb_packet_size = 1500;
+size_t loopkb_max_sockets = 128;
 
 socket_function_t _sys_socket = NULL;
 connect_function_t _sys_connect = NULL;
@@ -76,6 +77,11 @@ static void _loopkb_init()
 	if (getenv("LOOPKB_PACKET_SIZE") != NULL)
 	{
 		loopkb_packet_size = atoi(getenv("LOOPKB_PACKET_SIZE"));
+	}
+
+	if (getenv("LOOPKB_MAX_SOCKETS") != NULL)
+	{
+		loopkb_packet_size = atoi(getenv("LOOPKB_MAX_SOCKETS"));
 	}
 
 	OVERRIDE_FUNCTION(socket_function_t, socket, _sys_socket);

@@ -32,7 +32,6 @@
 #include "nmq.h"
 #include "util.h"
 
-#define MAX_SOCKET_FILE_MAPPING 128
 #define LOOPKB_FILE_PREFIX "_loopkb_"
 
 // Max filename length will be _loopkb_{FAMILY}.{PROTO}:{INET6_ADDRSTRLEN}:{PORT}:{INET6_ADDRSTRLEN}:{PORT}
@@ -44,8 +43,6 @@
 //#define PORT_LENGTH 5
 //#define MAX_FILENAME_SIZE 8 + (INET6_ADDRSTRLEN * 2) + (PORT_LENGTH * 2) + 2 + 5
 #define MAX_FILENAME_SIZE 256
-
-typedef int (*select_function_t)(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, struct timeval *restrict timeout);
 
 static const char eof[1] = { '\0' };
 
@@ -135,14 +132,14 @@ static void _loopkb_nmq_init()
 {
 	if (NULL == socket_file_map)
 	{
-		socket_file_map = malloc(sizeof(struct offloaded_socket_t) * MAX_SOCKET_FILE_MAPPING);
+		socket_file_map = malloc(sizeof(struct offloaded_socket_t) * loopkb_max_sockets);
 	}
 
-	for (int i = 0; i < MAX_SOCKET_FILE_MAPPING; ++i)
+	for (size_t i = 0; i < loopkb_max_sockets; ++i)
 	{
 		socket_file_map[i].sockfd = -1;
 		socket_file_map[i].context = NULL;
-		socket_file_map[i].direction = -1;
+		socket_file_map[i].direction = UINT8_MAX;
 	}
 
 	// 127.0.0.1/8
@@ -293,8 +290,8 @@ const char* _loopkb_nmq_generate_filename_for_socket(int sockfd, int direction, 
 
 int _loopkb_nmq_get_free_index(int sockfd)
 {
-	// TODO Lock
-	for (int i = 0; i < MAX_SOCKET_FILE_MAPPING; ++i)
+	// TODO Lock or use atomic operation
+	for (size_t i = 0; i < loopkb_max_sockets; ++i)
 	{
 		if (socket_file_map[i].sockfd == -1)
 		{
@@ -308,8 +305,10 @@ int _loopkb_nmq_get_free_index(int sockfd)
 
 int _loopkb_nmq_remove_index(int index, int sockfd)
 {
+	// TODO Lock or use atomic operation
 	if (socket_file_map[index].sockfd == sockfd)
 	{
+		socket_file_map[index].sockfd = -1;
 		return index;
 	}
 
@@ -318,7 +317,7 @@ int _loopkb_nmq_remove_index(int index, int sockfd)
 
 int _loopkb_nmq_get_index(int sockfd)
 {
-	for (int i = 0; i < MAX_SOCKET_FILE_MAPPING; ++i)
+	for (size_t i = 0; i < loopkb_max_sockets; ++i)
 	{
 		if (socket_file_map[i].sockfd == sockfd)
 		{
@@ -339,13 +338,18 @@ void _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_i
 	__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Adding offloaded socket: %d", sockfd);
 	assert(direction == 0 || direction == 1);
 	const int index = _loopkb_nmq_get_free_index(sockfd);
-	assert(index >= 0);
+	if (index < 0)
+	{
+		__loopkb_log(log_level_error, "_loopkb_nmq_add_offloaded_socket: Cannot offload socket %d, try increasing LOOPKB_MAX_SOCKETS", sockfd);
+		return;
+	}
+
 	__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Offloaded socket %d uses index %d", sockfd, index);
 
 	char filename[256];
 	_loopkb_nmq_generate_filename_for_socket(sockfd, direction, filename, MAX_FILENAME_SIZE);
 	assert(socket_file_map[index].context == NULL);
-	assert(socket_file_map[index].direction == -1);
+	assert(socket_file_map[index].direction == UINT8_MAX);
 	socket_file_map[index].context = malloc(sizeof(struct context_t));
 	socket_file_map[index].direction = direction;
 	__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Socket offloaded: #%d %d (%s) direction: %d", index, sockfd, filename, direction);
@@ -397,7 +401,7 @@ void _loopkb_nmq_remove_offloaded_socket(int sockfd)
 	if (socket_file_map[index].sockfd != -1)
 	{
 		const char* filename = socket_file_map[index].context->filename_;
-		__loopkb_log(log_level_debug, "_loopkb_nmq_remove_offloaded_socket: Removing socket %d (%s)", sockfd, filename);
+		__loopkb_log(log_level_debug, "_loopkb_nmq_remove_offloaded_socket: Removing socket %d (%s) at index %d", sockfd, filename, index);
 
 		const unsigned int ring_from_control = _ring_from_control(&socket_file_map[index]);
 		const unsigned int ring_to_control = _ring_to_control(&socket_file_map[index]);
@@ -412,9 +416,11 @@ void _loopkb_nmq_remove_offloaded_socket(int sockfd)
 		context_destroy(socket_file_map[index].context);
 		free(socket_file_map[index].context);
 		socket_file_map[index].context = NULL;
-		socket_file_map[index].direction = -1;
+		socket_file_map[index].direction = UINT8_MAX;
 
-		assert(_loopkb_nmq_remove_index(index, sockfd) != -1);
+		const int removed_index = _loopkb_nmq_remove_index(index, sockfd);
+		(void) removed_index;
+		assert(removed_index == index);
 	}
 	else
 	{
@@ -593,6 +599,7 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 			receive_len = loopkb_packet_size;
 			if (context_recvnb(socket_file_map[index].context, ring_from, ring_to, buf, &receive_len))
 			{
+				__loopkb_log(log_level_trace, "_loopkb_nmq_receive: Socket %d receiving %zu bytes (from %u to %u)", sockfd, receive_len, ring_from, ring_to);
 				len = (len < receive_len) ? len : receive_len;
 				if (receive_buffer != buf)
 				{
@@ -618,6 +625,7 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 				receive_len = loopkb_packet_size;
 				if (context_recvnb(socket_file_map[index].context, ring_from, ring_to, receive_buffer, &receive_len))
 				{
+					__loopkb_log(log_level_trace, "_loopkb_nmq_receive: Socket %d receiving %zu bytes (from %u to %u)", sockfd, receive_len, ring_from, ring_to);
 					len = (len < receive_len) ? len : receive_len;
 					if (receive_buffer != buf)
 					{
@@ -661,7 +669,7 @@ ssize_t _loopkb_nmq_send(int sockfd, const void* buf, size_t len, int flags, con
 
 		const unsigned int ring_from = _ring_from_data(&socket_file_map[index]);
 		const unsigned int ring_to = _ring_to_data(&socket_file_map[index]);
-		__loopkb_log(log_level_debug, "_loopkb_nmq_send: Socket %d sending %zu bytes (from %u to %u)", sockfd, len, ring_from, ring_to);
+		__loopkb_log(log_level_trace, "_loopkb_nmq_send: Socket %d sending %zu bytes (from %u to %u)", sockfd, len, ring_from, ring_to);
 
 		if (flags & SOCK_NONBLOCK)
 		{
@@ -726,7 +734,7 @@ int _loopkb_nmq_select(int nfds, fd_set *restrict readfds, fd_set *restrict writ
 		}
 	}
 
-	__loopkb_log(log_level_debug, "_loopkb_nmq_select: select() on %d fds, out of them %d are offloaded\n", total_fd_count, offloaded_sockets);
+	__loopkb_log(log_level_debug, "_loopkb_nmq_select: select() on %d fds, out of them %d are offloaded", total_fd_count, offloaded_sockets);
 
 	if (offloaded_sockets == 0)
 	{

@@ -37,7 +37,8 @@ AMD Ryzen 7 PRO 8840U:
 |--------------------|---------------|-----------------------------------------------|
 | LOOPKB_DEBUG       | unset         | If set to 1, spews some debugging information |
 | LOOPKB_RING_SIZE   | 15            | Number of items in each ring buffer           |
-| LOOPKB_PACKET_SIZE | 1500          | Mam item size in each ring buffer             |
+| LOOPKB_PACKET_SIZE | 1500          | Max item size in each ring buffer             |
+| LOOPKB_MAX_SOCKETS | 128           | Max offloaded sockets                         |
 
 ## TODO
 Lots, to begin with. But here is a partial list:

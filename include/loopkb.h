@@ -58,6 +58,7 @@ ssize_t _loopkb_recvmsg(int sockfd, struct msghdr *msg, int flags);
 // Configuration variables
 extern size_t loopkb_ring_size;
 extern size_t loopkb_packet_size;
+extern size_t loopkb_max_sockets;
 
 // Override functions
 extern socket_function_t _sys_socket;
