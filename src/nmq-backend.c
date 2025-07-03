@@ -131,7 +131,7 @@ static void _loopkb_nmq_init()
 
 	// ::1/128
 	inet_pton(AF_INET6, "::1", &ipv6_loopback_addresses[0].ip_addr);
-	inet_pton(AF_INET6, "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", &ipv6_loopback_addresses[0].ip_addr);
+	inet_pton(AF_INET6, "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", &ipv6_loopback_addresses[0].mask);
 	++ipv6_loopback_addresses_count;
 }
 
