@@ -86,7 +86,6 @@ struct socket_info_t
 struct offloaded_socket_t
 {
 	int sockfd;
-	char* filename;
 	struct context_t* context;
 	struct node_t* node_data;
 	struct node_t* node_control;
@@ -123,7 +122,6 @@ static void _loopkb_nmq_init()
 	for (int i = 0; i < MAX_SOCKET_FILE_MAPPING; ++i)
 	{
 		socket_file_map[i].sockfd = -1;
-		socket_file_map[i].filename = NULL;
 		socket_file_map[i].context = NULL;
 		socket_file_map[i].node_data = NULL;
 		socket_file_map[i].node_control = NULL;
@@ -326,20 +324,20 @@ void _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_i
 	assert(index >= 0);
 	__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Offloaded socket %d uses index %d", sockfd, index);
 
-	socket_file_map[index].filename = malloc(MAX_FILENAME_SIZE);
-	_loopkb_nmq_generate_filename_for_socket(sockfd, direction, socket_file_map[index].filename, MAX_FILENAME_SIZE);
+	char filename[256];
+	_loopkb_nmq_generate_filename_for_socket(sockfd, direction, filename, MAX_FILENAME_SIZE);
 	assert(socket_file_map[index].context == NULL);
 	assert(socket_file_map[index].node_data == NULL);
 	assert(socket_file_map[index].node_control == NULL);
 	socket_file_map[index].context = malloc(sizeof(struct context_t));
 	socket_file_map[index].node_data = malloc(sizeof(struct node_t));
 	socket_file_map[index].node_control = malloc(sizeof(struct node_t));
-	__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Socket offloaded: #%d %d (%s) direction: %d", index, sockfd, socket_file_map[index].filename, direction);
+	__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Socket offloaded: #%d %d (%s) direction: %d", index, sockfd, filename, direction);
 
 	if (direction == 0)
 	{
 		__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: context_create");
-		if (context_create(socket_file_map[index].context, socket_file_map[index].filename, total_channels, loopkb_ring_size, loopkb_packet_size) == NULL)
+		if (context_create(socket_file_map[index].context, filename, total_channels, loopkb_ring_size, loopkb_packet_size) == NULL)
 		{
 			__loopkb_log(log_level_error, "_loopkb_nmq_add_offloaded_socket: Error creating context %s", strerror(errno));
 			return;
@@ -348,18 +346,18 @@ void _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_i
 	else
 	{
 		__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: context_open");
-		int fd = open(socket_file_map[index].filename, O_RDWR);
+		int fd = open(filename, O_RDWR);
 		while (fd == -1)
 		{
-			__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Waiting for file to become ready at %s...", socket_file_map[index].filename);
+			__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Waiting for file to become ready at %s...", filename);
 			usleep(1000); // 1ms
-			fd = open(socket_file_map[index].filename, O_RDWR);
+			fd = open(filename, O_RDWR);
 		}
 		close(fd);
 
-		if (context_open(socket_file_map[index].context, socket_file_map[index].filename, 2, loopkb_ring_size, loopkb_packet_size) == NULL)
+		if (context_open(socket_file_map[index].context, filename, 2, loopkb_ring_size, loopkb_packet_size) == NULL)
 		{
-			__loopkb_log(log_level_error, "_loopkb_nmq_add_offloaded_socket: Cannot open context %s: %s", socket_file_map[index].filename, strerror(errno));
+			__loopkb_log(log_level_error, "_loopkb_nmq_add_offloaded_socket: Cannot open context %s: %s", filename, strerror(errno));
 			return;
 		}
 	}
@@ -384,18 +382,18 @@ void _loopkb_nmq_remove_offloaded_socket(int sockfd)
 
 	if (socket_file_map[index].sockfd != -1)
 	{
-		__loopkb_log(log_level_debug, "_loopkb_nmq_remove_offloaded_socket: Removing socket %d (%s)", sockfd, socket_file_map[index].filename);
+		const char* filename = socket_file_map[index].context->filename_;
+		__loopkb_log(log_level_debug, "_loopkb_nmq_remove_offloaded_socket: Removing socket %d (%s)", sockfd, filename);
 
 		unsigned int ring_to_control = socket_file_map[index].node_control->node_ == server_to_client_control ? client_to_server_control : server_to_client_control;
 		node_send(socket_file_map[index].node_control, ring_to_control, eof, sizeof(eof));
 
 		if (socket_file_map[index].node_data->node_ == server_to_client_data)
 		{
-			__loopkb_log(log_level_debug, "_loopkb_nmq_remove_offloaded_socket: Removing file %s", socket_file_map[index].filename);
-			unlink(socket_file_map[index].filename);
+			__loopkb_log(log_level_debug, "_loopkb_nmq_remove_offloaded_socket: Removing file %s", filename);
+			unlink(filename);
 		}
 
-		free(socket_file_map[index].filename);
 		context_destroy(socket_file_map[index].context);
 		free(socket_file_map[index].context);
 		socket_file_map[index].context = NULL;

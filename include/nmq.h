@@ -75,6 +75,7 @@ struct context_t
 	struct header* header_;
 	struct ring* ring_;
 	char* data_;
+	char filename_[256];
 };
 
 // Round up to the power of two
@@ -121,6 +122,7 @@ struct context_t* context_create(struct context_t* context_, const char* fname, 
 		context_->ring_[i]._offset = &context_->data_[i * real_size * msg_size] - context_->data_;
 	}
 
+	strncpy(context_->filename_, fname, sizeof(context_->filename_) - 1);
 	return context_;
 }
 
