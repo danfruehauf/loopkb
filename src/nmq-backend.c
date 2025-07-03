@@ -87,9 +87,28 @@ struct offloaded_socket_t
 {
 	int sockfd;
 	struct context_t* context;
-	struct node_t* node_data;
-	struct node_t* node_control;
+	uint8_t direction;
 };
+
+static inline unsigned int _ring_from_data(const struct offloaded_socket_t* offload_socket)
+{
+	return offload_socket->direction == 0 ? server_to_client_data : client_to_server_data;
+}
+
+static inline unsigned int _ring_to_data(const struct offloaded_socket_t* offload_socket)
+{
+	return offload_socket->direction == 0 ? client_to_server_data : server_to_client_data;
+}
+
+static inline unsigned int _ring_from_control(const struct offloaded_socket_t* offload_socket)
+{
+	return offload_socket->direction == 0 ? server_to_client_control : client_to_server_control;
+}
+
+static inline unsigned int _ring_to_control(const struct offloaded_socket_t* offload_socket)
+{
+	return offload_socket->direction == 0 ? client_to_server_control : server_to_client_control;
+}
 
 struct offloaded_socket_t* socket_file_map = NULL;
 
@@ -123,8 +142,7 @@ static void _loopkb_nmq_init()
 	{
 		socket_file_map[i].sockfd = -1;
 		socket_file_map[i].context = NULL;
-		socket_file_map[i].node_data = NULL;
-		socket_file_map[i].node_control = NULL;
+		socket_file_map[i].direction = -1;
 	}
 
 	// 127.0.0.1/8
@@ -327,11 +345,9 @@ void _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_i
 	char filename[256];
 	_loopkb_nmq_generate_filename_for_socket(sockfd, direction, filename, MAX_FILENAME_SIZE);
 	assert(socket_file_map[index].context == NULL);
-	assert(socket_file_map[index].node_data == NULL);
-	assert(socket_file_map[index].node_control == NULL);
+	assert(socket_file_map[index].direction == -1);
 	socket_file_map[index].context = malloc(sizeof(struct context_t));
-	socket_file_map[index].node_data = malloc(sizeof(struct node_t));
-	socket_file_map[index].node_control = malloc(sizeof(struct node_t));
+	socket_file_map[index].direction = direction;
 	__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Socket offloaded: #%d %d (%s) direction: %d", index, sockfd, filename, direction);
 
 	if (direction == 0)
@@ -362,14 +378,12 @@ void _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_i
 		}
 	}
 
-	const unsigned int ring_from = direction;
-	const unsigned int ring_to = direction == server_to_client_data ? client_to_server_data : server_to_client_data;
-	const unsigned int ring_from_control = ring_from + 2;
-	const unsigned int ring_to_control = ring_to + 2;
+	const unsigned int ring_from = _ring_from_data(&socket_file_map[index]);
+	const unsigned int ring_to = _ring_to_data(&socket_file_map[index]);
+	const unsigned int ring_from_control = _ring_from_control(&socket_file_map[index]);
+	const unsigned int ring_to_control = _ring_to_control(&socket_file_map[index]);
 	__loopkb_log(log_level_info, "_loopkb_nmq_add_offloaded_socket: Socket %d uses recv %d, send %d, recv_control: %d, send_control: %d",
 				 sockfd, ring_from, ring_to, ring_from_control, ring_to_control);
-	node_init(socket_file_map[index].node_data, socket_file_map[index].context, ring_from);
-	node_init(socket_file_map[index].node_control, socket_file_map[index].context, ring_from_control);
 }
 
 void _loopkb_nmq_remove_offloaded_socket(int sockfd)
@@ -385,10 +399,11 @@ void _loopkb_nmq_remove_offloaded_socket(int sockfd)
 		const char* filename = socket_file_map[index].context->filename_;
 		__loopkb_log(log_level_debug, "_loopkb_nmq_remove_offloaded_socket: Removing socket %d (%s)", sockfd, filename);
 
-		unsigned int ring_to_control = socket_file_map[index].node_control->node_ == server_to_client_control ? client_to_server_control : server_to_client_control;
-		node_send(socket_file_map[index].node_control, ring_to_control, eof, sizeof(eof));
+		const unsigned int ring_from_control = _ring_from_control(&socket_file_map[index]);
+		const unsigned int ring_to_control = _ring_to_control(&socket_file_map[index]);
+		context_send(socket_file_map[index].context, ring_from_control, ring_to_control, eof, sizeof(eof));
 
-		if (socket_file_map[index].node_data->node_ == server_to_client_data)
+		if (socket_file_map[index].direction == 0)
 		{
 			__loopkb_log(log_level_debug, "_loopkb_nmq_remove_offloaded_socket: Removing file %s", filename);
 			unlink(filename);
@@ -397,10 +412,7 @@ void _loopkb_nmq_remove_offloaded_socket(int sockfd)
 		context_destroy(socket_file_map[index].context);
 		free(socket_file_map[index].context);
 		socket_file_map[index].context = NULL;
-		free(socket_file_map[index].node_data);
-		free(socket_file_map[index].node_control);
-		socket_file_map[index].node_data = NULL;
-		socket_file_map[index].node_control = NULL;
+		socket_file_map[index].direction = -1;
 
 		assert(_loopkb_nmq_remove_index(index, sockfd) != -1);
 	}
@@ -462,12 +474,13 @@ bool _loopkb_nmq_should_offload_socket(int sockfd, const struct socket_info_t* s
 
 bool _loopkb_nmq_can_send(int sockfd)
 {
-	// TODO In efficient, as it is being called from poll/select and will search the whole array every time
+	// TODO Not super efficient, as it is being called from poll/select and will search the whole array every time
 	const int index = _loopkb_nmq_is_offloaded_socket(sockfd);
 	if (index >= 0)
 	{
-		const unsigned int ring_to = socket_file_map[index].node_data->node_ == server_to_client_data ? client_to_server_data : server_to_client_data;
-		return node_can_send(socket_file_map[index].node_data, ring_to);
+		const unsigned int ring_from = _ring_from_data(&socket_file_map[index]);
+		const unsigned int ring_to = _ring_to_data(&socket_file_map[index]);
+		return context_can_send(socket_file_map[index].context, ring_from, ring_to);
 	}
 
 	return false;
@@ -475,12 +488,13 @@ bool _loopkb_nmq_can_send(int sockfd)
 
 bool _loopkb_nmq_can_receive(int sockfd)
 {
-	// TODO In efficient, as it is being called from poll/select and will search the whole array every time
+	// TODO Not super efficient, as it is being called from poll/select and will search the whole array every time
 	const int index = _loopkb_nmq_is_offloaded_socket(sockfd);
 	if (index >= 0)
 	{
-		const unsigned int ring_from = socket_file_map[index].node_data->node_ == server_to_client_data ? client_to_server_data : server_to_client_data;
-		return node_can_recv(socket_file_map[index].node_data, ring_from);
+		const unsigned int ring_from = _ring_from_data(&socket_file_map[index]);
+		const unsigned int ring_to = _ring_to_data(&socket_file_map[index]);
+		return context_can_recv(socket_file_map[index].context, ring_from, ring_to);
 	}
 
 	return false;
@@ -555,15 +569,19 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 	const int index = _loopkb_nmq_is_offloaded_socket(sockfd);
 	if (index >= 0)
 	{
-		const unsigned int ring_from = socket_file_map[index].node_data->node_ == server_to_client_data ? client_to_server_data : server_to_client_data;
-		const unsigned int ring_from_control = socket_file_map[index].node_control->node_ == server_to_client_control ? client_to_server_control : server_to_client_control;
+		// Flip direction for recv
+		const unsigned int ring_from = _ring_from_data(&socket_file_map[index]);
+		const unsigned int ring_to = _ring_to_data(&socket_file_map[index]);
+		const unsigned int ring_from_control = _ring_from_control(&socket_file_map[index]);
+		const unsigned int ring_to_control = _ring_to_control(&socket_file_map[index]);
+
 		int flags = fcntl(sockfd, F_GETFL, 0);
 
 		size_t receive_len = loopkb_packet_size;
 		if (flags & SOCK_NONBLOCK)
 		{
 			receive_len = loopkb_packet_size;
-			if (node_recvnb(socket_file_map[index].node_control, ring_from_control, buf, &receive_len))
+			if (context_recvnb(socket_file_map[index].context, ring_from_control, ring_to_control, buf, &receive_len))
 			{
 				if (receive_len == sizeof(eof) && memcmp(buf, eof, sizeof(eof)))
 				{
@@ -573,7 +591,7 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 
 			// Non blocking
 			receive_len = loopkb_packet_size;
-			if (node_recvnb(socket_file_map[index].node_data, ring_from, buf, &receive_len))
+			if (context_recvnb(socket_file_map[index].context, ring_from, ring_to, buf, &receive_len))
 			{
 				len = (len < receive_len) ? len : receive_len;
 				if (receive_buffer != buf)
@@ -598,7 +616,7 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 			{
 				// Blocking
 				receive_len = loopkb_packet_size;
-				if (node_recvnb(socket_file_map[index].node_data, ring_from, receive_buffer, &receive_len))
+				if (context_recvnb(socket_file_map[index].context, ring_from, ring_to, receive_buffer, &receive_len))
 				{
 					len = (len < receive_len) ? len : receive_len;
 					if (receive_buffer != buf)
@@ -610,7 +628,7 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 				}
 
 				receive_len = loopkb_packet_size;
-				if (node_recvnb(socket_file_map[index].node_control, ring_from_control, receive_buffer, &receive_len))
+				if (context_recvnb(socket_file_map[index].context, ring_from_control, ring_to_control, receive_buffer, &receive_len))
 				{
 					if (receive_len == sizeof(eof) && memcmp(receive_buffer, eof, sizeof(eof)) == 0)
 					{
@@ -641,12 +659,13 @@ ssize_t _loopkb_nmq_send(int sockfd, const void* buf, size_t len, int flags, con
 	{
 		int flags = fcntl(sockfd, F_GETFL, 0);
 
-		const unsigned int ring_to = socket_file_map[index].node_data->node_ == server_to_client_data ? client_to_server_data : server_to_client_data;
-		__loopkb_log(log_level_debug, "_loopkb_nmq_send: Socket %d sending %zu bytes (from %u to %u)", sockfd, len, socket_file_map[index].node_data->node_, ring_to);
+		const unsigned int ring_from = _ring_from_data(&socket_file_map[index]);
+		const unsigned int ring_to = _ring_to_data(&socket_file_map[index]);
+		__loopkb_log(log_level_debug, "_loopkb_nmq_send: Socket %d sending %zu bytes (from %u to %u)", sockfd, len, ring_from, ring_to);
 
 		if (flags & SOCK_NONBLOCK)
 		{
-			if (node_sendnb(socket_file_map[index].node_data, ring_to, buf, len))
+			if (context_sendnb(socket_file_map[index].context, ring_from, ring_to, buf, len))
 			{
 				return len > loopkb_packet_size ? loopkb_packet_size : len;
 			}
@@ -657,7 +676,7 @@ ssize_t _loopkb_nmq_send(int sockfd, const void* buf, size_t len, int flags, con
 		else
 		{
 			// Blocking
-			node_send(socket_file_map[index].node_data, ring_to, buf, len);
+			context_send(socket_file_map[index].context, ring_from, ring_to, buf, len);
 			return len > loopkb_packet_size ? loopkb_packet_size : len;
 		}
 	}
@@ -698,7 +717,7 @@ int _loopkb_nmq_select(int nfds, fd_set *restrict readfds, fd_set *restrict writ
 				(writefds != NULL && FD_ISSET(i, writefds)) ||
 				(exceptfds != NULL && FD_ISSET(i, exceptfds)))
 		{
-			if (_loopkb_nmq_is_offloaded_socket(i))
+			if (_loopkb_nmq_is_offloaded_socket(i) >= 0)
 			{
 				++offloaded_sockets;
 			}
@@ -774,7 +793,7 @@ int _loopkb_nmq_select(int nfds, fd_set *restrict readfds, fd_set *restrict writ
 
 		for (int i = 0; i < FD_SETSIZE; ++i)
 		{
-			if (_loopkb_nmq_is_offloaded_socket(i))
+			if (_loopkb_nmq_is_offloaded_socket(i) >= 0)
 			{
 				if ((readfds != NULL && FD_ISSET(i, readfds) && _loopkb_nmq_can_receive(i)))
 				{
