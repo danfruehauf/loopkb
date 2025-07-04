@@ -586,7 +586,7 @@ int _loopkb_nmq_check_add_socket(int sockfd, int direction)
 	}
 	else
 	{
-		__loopkb_log(log_level_error, "_loopkb_nmq_check_add_socket: Error calling _loopkb_nmq_get_socket_info()");
+		__loopkb_log(log_level_warning, "_loopkb_nmq_check_add_socket: Error calling _loopkb_nmq_get_socket_info()");
 	}
 
 	return -1;

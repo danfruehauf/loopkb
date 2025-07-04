@@ -20,8 +20,9 @@
 
 #pragma once
 
-#include <sys/socket.h>
+#include <stdio.h>
 #include <sys/select.h>
+#include <sys/socket.h>
 #include <time.h>
 
 // Basic function
@@ -42,6 +43,8 @@ typedef ssize_t (*recv_function_t)(int sockfd, void* buf, size_t len, int flags)
 typedef ssize_t (*recvfrom_function_t)(int sockfd, void* buf, size_t len, int flags, struct sockaddr *restrict src_addr, socklen_t* restrict addrlen);
 typedef ssize_t (*recvmsg_function_t)(int sockfd, struct msghdr *msg, int flags);
 
+int _loopkb_banner(FILE* fp);
+
 int _loopkb_socket(int domain, int type, int protocol);
 int _loopkb_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 int _loopkb_accept(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrlen);
@@ -58,6 +61,7 @@ ssize_t _loopkb_recvfrom(int sockfd, void* buf, size_t len, int flags, struct so
 ssize_t _loopkb_recvmsg(int sockfd, struct msghdr *msg, int flags);
 
 // Configuration variables
+extern size_t loopkb_debug;
 extern size_t loopkb_ring_size;
 extern size_t loopkb_packet_size;
 extern size_t loopkb_max_sockets;

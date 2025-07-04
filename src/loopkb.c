@@ -32,6 +32,7 @@
 
 #define VISIBILITY_DEFAULT __attribute__((__visibility__("default")))
 
+size_t loopkb_debug = 0;
 size_t loopkb_ring_size = 15;
 size_t loopkb_packet_size = 1500;
 size_t loopkb_max_sockets = 128;
@@ -61,11 +62,12 @@ recvmsg_function_t _sys_recvmsg = NULL;
 __attribute__((constructor))
 static void _loopkb_init()
 {
-	loopkb_log_level_stdout = log_level_info;
-	loopkb_log_level_stderr = log_level_info;
+	loopkb_log_level_stdout = log_level_error;
+	loopkb_log_level_stderr = log_level_error;
 
 	if (getenv("LOOPKB_DEBUG") != NULL && strcmp(getenv("LOOPKB_DEBUG"), "1") == 0)
 	{
+		loopkb_debug = 1;
 		loopkb_log_level_stdout = log_level_debug;
 		loopkb_log_level_stderr = log_level_debug;
 	}
@@ -85,6 +87,11 @@ static void _loopkb_init()
 		loopkb_packet_size = atoi(getenv("LOOPKB_MAX_SOCKETS"));
 	}
 
+	if (loopkb_debug > 0)
+	{
+		_loopkb_banner(stdout);
+	}
+
 	OVERRIDE_FUNCTION(socket_function_t, socket, _sys_socket);
 	OVERRIDE_FUNCTION(connect_function_t, connect, _sys_connect);
 	OVERRIDE_FUNCTION(accept_function_t, accept, _sys_accept);
@@ -97,6 +104,22 @@ static void _loopkb_init()
 	OVERRIDE_FUNCTION(recv_function_t, recv, _sys_recv);
 	OVERRIDE_FUNCTION(recvfrom_function_t, recvfrom, _sys_recvfrom);
 	OVERRIDE_FUNCTION(recvmsg_function_t, recvmsg, _sys_recvmsg);
+}
+
+int _loopkb_banner(FILE* fp)
+{
+	int column_width = 20;
+
+	int retval = 0;
+	retval += fprintf(fp, "============================\n");
+	retval += fprintf(fp, "========== LoopKB ==========\n");
+	retval += fprintf(fp, "============================\n");
+	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_DEBUG", column_width, loopkb_debug);
+	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_RING_SIZE", column_width, loopkb_ring_size);
+	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_PACKET_SIZE", column_width, loopkb_packet_size);
+	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_MAX_SOCKETS", column_width, loopkb_max_sockets);
+	retval += fprintf(fp, "============================\n");
+	return retval;
 }
 
 int _loopkb_socket(int domain, int type, int protocol)
