@@ -41,6 +41,7 @@ connect_function_t _sys_connect = NULL;
 accept_function_t _sys_accept = NULL;
 close_function_t _sys_close = NULL;
 select_function_t _sys_select = NULL;
+pselect_function_t _sys_pselect = NULL;
 send_function_t _sys_send = NULL;
 sendto_function_t _sys_sendto = NULL;
 sendmsg_function_t _sys_sendmsg = NULL;
@@ -89,6 +90,7 @@ static void _loopkb_init()
 	OVERRIDE_FUNCTION(accept_function_t, accept, _sys_accept);
 	OVERRIDE_FUNCTION(close_function_t, close, _sys_close);
 	OVERRIDE_FUNCTION(select_function_t, select, _sys_select);
+	OVERRIDE_FUNCTION(pselect_function_t, pselect, _sys_pselect);
 	OVERRIDE_FUNCTION(send_function_t, send, _sys_send);
 	OVERRIDE_FUNCTION(sendto_function_t, sendto, _sys_sendto);
 	OVERRIDE_FUNCTION(sendmsg_function_t, sendmsg, _sys_sendmsg);
@@ -175,7 +177,23 @@ int _loopkb_close(int fd)
 
 int _loopkb_select(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, struct timeval *restrict timeout)
 {
-	return _loopkb_nmq_select(nfds, readfds, writefds, exceptfds, timeout);
+	if (timeout != NULL)
+	{
+		struct timespec ts;
+		// Convert timeout usec to timespec (ns)
+		ts.tv_sec = timeout->tv_sec;
+		ts.tv_nsec = timeout->tv_usec * 1000;
+		return _loopkb_nmq_pselect(nfds, readfds, writefds, exceptfds, &ts, NULL);
+	}
+	else
+	{
+		return _loopkb_nmq_pselect(nfds, readfds, writefds, exceptfds, NULL, NULL);
+	}
+}
+
+int _loopkb_pselect(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, const struct timespec *restrict timeout, const sigset_t* restrict sigmask)
+{
+	return _loopkb_nmq_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
 }
 
 ssize_t _loopkb_send(int sockfd, const void* buf, size_t len, int flags)
@@ -257,6 +275,12 @@ VISIBILITY_DEFAULT
 int select(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, struct timeval *restrict timeout)
 {
 	return _loopkb_select(nfds, readfds, writefds, exceptfds, timeout);
+}
+
+VISIBILITY_DEFAULT
+int pselect(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, const struct timespec *restrict timeout, const sigset_t* restrict sigmask)
+{
+	return _loopkb_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
 }
 
 VISIBILITY_DEFAULT

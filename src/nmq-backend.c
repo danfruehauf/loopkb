@@ -22,6 +22,7 @@
 #include <dlfcn.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <stdint.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -712,9 +713,9 @@ int merge_fds(fd_set* fdset1, const fd_set* fdset2)
 	return retval;
 }
 
-int _loopkb_nmq_select(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, struct timeval *restrict timeout)
+int _loopkb_nmq_pselect(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, const struct timespec *restrict timeout, const sigset_t* restrict sigmask)
 {
-	__loopkb_log(log_level_trace, "_loopkb_nmq_select: %d", nfds);
+	__loopkb_log(log_level_trace, "_loopkb_nmq_pselect: %d", nfds);
 
 	int offloaded_sockets = 0;
 	int total_fd_count = 0;
@@ -734,12 +735,18 @@ int _loopkb_nmq_select(int nfds, fd_set *restrict readfds, fd_set *restrict writ
 		}
 	}
 
-	__loopkb_log(log_level_debug, "_loopkb_nmq_select: select() on %d fds, out of them %d are offloaded", total_fd_count, offloaded_sockets);
+	__loopkb_log(log_level_debug, "_loopkb_nmq_pselect: select() on %d fds, out of them %d are offloaded", total_fd_count, offloaded_sockets);
 
 	if (offloaded_sockets == 0)
 	{
-		__loopkb_log(log_level_info, "_loopkb_nmq_select: Returning _sys_select - no offloaded sockets");
-		return _sys_select(nfds, readfds, writefds, exceptfds, timeout);
+		__loopkb_log(log_level_info, "_loopkb_nmq_pselect: Returning _sys_select - no offloaded sockets");
+		return _sys_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
+	}
+
+	sigset_t sigmask_prev;
+	if (NULL != sigmask)
+	{
+		sigprocmask(SIG_SETMASK, sigmask, &sigmask_prev);
 	}
 
 	fd_set retval_readfds;
@@ -753,17 +760,17 @@ int _loopkb_nmq_select(int nfds, fd_set *restrict readfds, fd_set *restrict writ
 	fd_set select_writefds_tmp;
 	fd_set select_exceptfds_tmp;
 
-	__int64_t now_us = system_clock_us();
-	__int64_t timeout_us = 0;
+	__int64_t now_ns = system_clock_ns();
+	__int64_t timeout_ns = 0;
 	if (NULL != timeout)
 	{
-		timeout_us = timeout->tv_sec * 1e6 + timeout->tv_usec;
+		timeout_ns = timeout->tv_sec * 1e9 + timeout->tv_nsec;
 	}
-	const __int64_t finish_us = now_us + timeout_us;
+	const __int64_t finish_ns = now_ns + timeout_ns;
 
-	struct timeval sys_select_1_us;
-	sys_select_1_us.tv_sec = 0;
-	sys_select_1_us.tv_usec = 1;
+	struct timespec sys_select_1_ns;
+	sys_select_1_ns.tv_sec = 0;
+	sys_select_1_ns.tv_nsec = 1;
 
 	bool has_data = false;
 
@@ -790,7 +797,8 @@ int _loopkb_nmq_select(int nfds, fd_set *restrict readfds, fd_set *restrict writ
 			memcpy(&select_exceptfds_tmp, exceptfds, sizeof(fd_set));
 		}
 
-		int sys_select_retval = _sys_select(nfds, sys_select_readfds, sys_select_writefds, sys_select_exceptfds, &sys_select_1_us);
+		// Do not use sigmask here, as we manage it from outside of pselect()
+		int sys_select_retval = _sys_pselect(nfds, sys_select_readfds, sys_select_writefds, sys_select_exceptfds, &sys_select_1_ns, NULL);
 		if (sys_select_retval > 0)
 		{
 			merge_fds(&retval_readfds, sys_select_readfds);
@@ -828,9 +836,9 @@ int _loopkb_nmq_select(int nfds, fd_set *restrict readfds, fd_set *restrict writ
 			break;
 		}
 
-		now_us = system_clock_us();
+		now_ns = system_clock_ns();
 	}
-	while (timeout_us <= 0 || now_us <= finish_us);
+	while (timeout_ns <= 0 || now_ns <= finish_ns);
 
 	if (NULL != readfds)
 	{
@@ -864,6 +872,11 @@ int _loopkb_nmq_select(int nfds, fd_set *restrict readfds, fd_set *restrict writ
 		{
 			++retval;
 		}
+	}
+
+	if (NULL != sigmask)
+	{
+		sigprocmask(SIG_SETMASK, &sigmask_prev, NULL);
 	}
 
 	return retval;
