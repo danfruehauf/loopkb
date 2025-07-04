@@ -82,7 +82,7 @@ sockperf: ---> <MIN> observation =    0.285
 ## TODO
 Lots, to begin with. But here is a partial list:
  * Implement more system calls, notably:
-   * poll()
+   * ~~poll()~~
    * epoll()
    * recvmsg()/recvmmsg()
    * fcntl() (With `SOL_SOCKET`)

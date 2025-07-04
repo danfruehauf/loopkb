@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <poll.h>
 #include <stdio.h>
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -33,6 +34,8 @@ typedef int (*accept4_function_t)(int sockfd, struct sockaddr *restrict addr, so
 typedef int (*close_function_t)(int fd);
 typedef int (*select_function_t)(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, struct timeval *restrict timeout);
 typedef int (*pselect_function_t)(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, const struct timespec *restrict timeout, const sigset_t* restrict sigmask);
+typedef int (*poll_function_t)(struct pollfd *fds, nfds_t nfds, int timeout);
+typedef int (*ppoll_function_t)(struct pollfd* fds, nfds_t nfds, const struct timespec* tmo_p, const sigset_t* sigmask);
 
 // send*
 typedef ssize_t (*send_function_t)(int sockfd, const void* buf, size_t len, int flags);
@@ -54,6 +57,8 @@ int _loopkb_accept(int sockfd, struct sockaddr *restrict addr, socklen_t* restri
 int _loopkb_close(int fd);
 int _loopkb_select(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, struct timeval *restrict timeout);
 int _loopkb_pselect(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, const struct timespec *restrict timeout, const sigset_t* restrict sigmask);
+int _loopkb_poll(struct pollfd *fds, nfds_t nfds, int timeout);
+int _loopkb_ppoll(struct pollfd* fds, nfds_t nfds, const struct timespec* tmo_p, const sigset_t* sigmask);
 
 ssize_t _loopkb_send(int sockfd, const void* buf, size_t len, int flags);
 ssize_t _loopkb_sendto(int sockfd, const void* buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen);
@@ -78,6 +83,8 @@ extern accept_function_t _sys_accept;
 extern close_function_t _sys_close;
 extern select_function_t _sys_select;
 extern pselect_function_t _sys_pselect;
+extern poll_function_t _sys_poll;
+extern ppoll_function_t _sys_ppoll;
 extern send_function_t _sys_send;
 extern sendto_function_t _sys_sendto;
 extern sendmsg_function_t _sys_sendmsg;

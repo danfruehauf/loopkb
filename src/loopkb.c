@@ -44,6 +44,8 @@ accept4_function_t _sys_accept4 = NULL;
 close_function_t _sys_close = NULL;
 select_function_t _sys_select = NULL;
 pselect_function_t _sys_pselect = NULL;
+poll_function_t _sys_poll = NULL;
+ppoll_function_t _sys_ppoll = NULL;
 send_function_t _sys_send = NULL;
 sendto_function_t _sys_sendto = NULL;
 sendmsg_function_t _sys_sendmsg = NULL;
@@ -101,6 +103,7 @@ static void _loopkb_init()
 	OVERRIDE_FUNCTION(accept_function_t, accept, _sys_accept);
 	OVERRIDE_FUNCTION(close_function_t, close, _sys_close);
 	OVERRIDE_FUNCTION(select_function_t, select, _sys_select);
+	OVERRIDE_FUNCTION(poll_function_t, poll, _sys_poll);
 	OVERRIDE_FUNCTION(send_function_t, send, _sys_send);
 	OVERRIDE_FUNCTION(sendto_function_t, sendto, _sys_sendto);
 	OVERRIDE_FUNCTION(sendmsg_function_t, sendmsg, _sys_sendmsg);
@@ -113,6 +116,7 @@ static void _loopkb_init()
 #ifdef _GNU_SOURCE
 	OVERRIDE_FUNCTION(accept4_function_t, accept4, _sys_accept4);
 	OVERRIDE_FUNCTION(pselect_function_t, pselect, _sys_pselect);
+	OVERRIDE_FUNCTION(ppoll_function_t, poll, _sys_ppoll);
 #endif
 
 #pragma GCC diagnostic pop
@@ -207,6 +211,20 @@ int _loopkb_select(int nfds, fd_set *restrict readfds, fd_set *restrict writefds
 int _loopkb_pselect(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, const struct timespec *restrict timeout, const sigset_t* restrict sigmask)
 {
 	return _loopkb_nmq_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
+}
+
+int _loopkb_poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+	struct timespec ts;
+	// Convert timeout milliseconds to timespec (ns)
+	ts.tv_sec = timeout / 1000; // seconds
+	ts.tv_nsec = (timeout % 1000) * 1000000; // nanoseconds
+	return _loopkb_nmq_ppoll(fds, nfds, &ts, NULL);
+}
+
+int _loopkb_ppoll(struct pollfd* fds, nfds_t nfds, const struct timespec* tmo_p, const sigset_t* sigmask)
+{
+	return _loopkb_nmq_ppoll(fds, nfds, tmo_p, sigmask);
 }
 
 ssize_t _loopkb_send(int sockfd, const void* buf, size_t len, int flags)
@@ -323,6 +341,18 @@ VISIBILITY_DEFAULT
 int pselect(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, const struct timespec *restrict timeout, const sigset_t* restrict sigmask)
 {
 	return _loopkb_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
+}
+
+VISIBILITY_DEFAULT
+int poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+	return _loopkb_poll(fds, nfds, timeout);
+}
+
+VISIBILITY_DEFAULT
+int ppoll(struct pollfd *fds, nfds_t nfds, const struct timespec *tmo_p, const sigset_t *sigmask)
+{
+	return _loopkb_ppoll(fds, nfds, tmo_p, sigmask);
 }
 
 VISIBILITY_DEFAULT

@@ -1053,3 +1053,116 @@ int _loopkb_nmq_pselect(int nfds, fd_set *restrict readfds, fd_set *restrict wri
 
 	return retval;
 }
+
+int _loopkb_nmq_ppoll(struct pollfd* fds, nfds_t nfds, const struct timespec* tmo_p, const sigset_t* sigmask)
+{
+	__loopkb_log(log_level_trace, "_loopkb_nmq_ppoll: %d", nfds);
+
+	int offloaded_sockets = 0;
+	int total_fd_count = 0;
+
+	for (size_t i = 0; i < nfds; ++i)
+	{
+		if (fds[i].events & POLLIN ||
+				fds[i].events & POLLOUT ||
+				fds[i].events & POLLERR)
+		{
+			if (_loopkb_nmq_is_offloaded_socket(i))
+			{
+				++offloaded_sockets;
+			}
+
+			++total_fd_count;
+		}
+	}
+
+	__loopkb_log(log_level_debug, "_loopkb_nmq_ppoll: ppoll() on %d fds, out of them %d are offloaded\n", total_fd_count, offloaded_sockets);
+
+	if (offloaded_sockets == 0)
+	{
+		__loopkb_log(log_level_info, "_loopkb_nmq_ppoll: Returning _sys_ppoll - no offloaded sockets");
+#ifdef _GNU_SOURCE
+		return _sys_ppoll(fds, nfds, tmo_p, sigmask);
+#else
+		int timeout = tmo_p->tv_sec * 1000 + tmo_p->tv_nsec * 1000000;
+		return _sys_poll(fds, nfds, timeout);
+#endif
+	}
+
+	sigset_t sigmask_prev;
+	if (NULL != sigmask)
+	{
+		sigprocmask(SIG_SETMASK, sigmask, &sigmask_prev);
+	}
+
+	__int64_t now_ns = system_clock_ns();
+	__int64_t timeout_ns = 0;
+	if (NULL != tmo_p)
+	{
+		timeout_ns = tmo_p->tv_sec * 1e9 + tmo_p->tv_nsec;
+	}
+	const __int64_t finish_ns = now_ns + timeout_ns;
+
+	bool has_data = false;
+
+	do
+	{
+#ifdef _GNU_SOURCE
+		struct timespec sys_ppoll_1_ns;
+		sys_ppoll_1_ns.tv_sec = 0;
+		sys_ppoll_1_ns.tv_nsec = 1;
+		int sys_ppoll_retval = _sys_ppoll(fds, nfds, &sys_ppoll_1_ns, sigmask);
+#else
+		const int timeout_milliseconds = 1;
+		int sys_ppoll_retval = _sys_poll(fds, nfds, timeout_milliseconds);
+#endif
+		if (sys_ppoll_retval > 0)
+		{
+			has_data = true;
+		}
+
+		for (size_t i = 0; i < nfds; ++i)
+		{
+			if (_loopkb_nmq_is_offloaded_socket(i))
+			{
+				if (fds[i].events & POLLIN && _loopkb_nmq_can_receive(i))
+				{
+					fds[i].revents |= POLLIN;
+					has_data = true;
+				}
+
+				if (fds[i].events & POLLOUT && _loopkb_nmq_can_send(i))
+				{
+					fds[i].revents |= POLLOUT;
+					has_data = true;
+				}
+
+				// TODO Handle POLLHUP when socket is disconnected
+			}
+		}
+
+		if (has_data)
+		{
+			break;
+		}
+
+		now_ns = system_clock_ns();
+	}
+	while (timeout_ns <= 0 || now_ns <= finish_ns);
+
+	int retval = 0;
+	for (size_t i = 0; i < nfds; ++i)
+	{
+		if (fds[i].revents > 0)
+		{
+			++retval;
+		}
+	}
+
+	if (NULL != sigmask)
+	{
+		sigprocmask(SIG_SETMASK, &sigmask_prev, NULL);
+	}
+
+	return retval;
+}
