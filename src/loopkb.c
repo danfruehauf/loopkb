@@ -114,34 +114,7 @@ int _loopkb_socket(int domain, int type, int protocol)
 int _loopkb_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
 	__loopkb_log(log_level_trace, "_loopkb_connect");
-
-	// Make socket blocking, so we know what is the other endpoint of the connection
-	// TODO perform this only if target is localhost in any way
-	int flags = fcntl(sockfd, F_GETFL, 0);
-	int orig_flags = flags;
-	flags &= ~SOCK_NONBLOCK;
-	if (fcntl(sockfd, F_SETFL, flags) != 0)
-	{
-		fprintf(stderr, "fcntl: %s\n", strerror(errno));
-	}
-
-	int retval = _sys_connect(sockfd, addr, addrlen);
-	if (retval >= 0)
-	{
-		_loopkb_nmq_connect(sockfd, addr, addrlen);
-	}
-	else
-	{
-		// TODO handle non blocking sockets
-		fprintf(stderr, "connect: %s\n", strerror(errno));
-	}
-
-	if (fcntl(sockfd, F_SETFL, orig_flags) != 0)
-	{
-		fprintf(stderr, "fcntl: %s\n", strerror(errno));
-	}
-
-	return retval;
+	return _loopkb_nmq_connect(sockfd, addr, addrlen);
 }
 
 int _loopkb_accept(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrlen)

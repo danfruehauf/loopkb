@@ -17,6 +17,8 @@ $ (mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release ..  && cmake -
 ```
 
 ## Example Usage
+
+### sockperf
 Server:
 ```
 $ LD_PRELOAD=build/libloopkb.so sockperf server --addr 127.0.0.1 --tcp
@@ -24,7 +26,18 @@ $ LD_PRELOAD=build/libloopkb.so sockperf server --addr 127.0.0.1 --tcp
 
 Client:
 ```
-$ LD_PRELOAD=build/libloopkb.so sockperf ping-pong --addr 127.0.0.1 --tcp --burst 2
+$ LD_PRELOAD=build/libloopkb.so sockperf ping-pong --addr 127.0.0.1 --client_addr 127.0.0.1 --tcp --burst 2
+```
+
+### nc
+Server:
+```
+$ LD_PRELOAD=build/libloopkb.so nc -l 127.0.0.1 5000
+```
+
+Client:
+```
+$ LD_PRELOAD=build/libloopkb.so nc --source 127.0.0.1 127.0.0.1 5000
 ```
 
 ## Performance
