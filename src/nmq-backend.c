@@ -20,6 +20,7 @@
 
 #include <arpa/inet.h>
 #include <dlfcn.h>
+#include <emmintrin.h>
 #include <errno.h>
 #include <netinet/in.h>
 #include <signal.h>
@@ -56,28 +57,29 @@ enum channel_type_t : uint8_t
 	total_channels = 4,
 };
 
+enum socket_type_t : uint8_t
+{
+	tcp_server = 0,
+	tcp_client = 1,
+	udp = 2,
+	unknown = UINT8_MAX,
+};
+
 struct socket_info_t
 {
 	int sock;
 	union
 	{
-		struct
-		{
-			uint32_t ip_addr_1;
-			uint32_t ip_addr_2;
-		} ipv4;
-
-		struct
-		{
-			__uint128_t ip_addr_1;
-			__uint128_t ip_addr_2;
-		} ipv6;
+		struct sockaddr addr_1;
+		struct sockaddr_in6 addr6_1; // Largest member
+		struct sockaddr_in addr4_1;
 	};
-	char ip_addr_1_str[INET6_ADDRSTRLEN];
-	char ip_addr_2_str[INET6_ADDRSTRLEN];
-	uint16_t port_1;
-	uint16_t port_2;
-	int family;
+	union
+	{
+		struct sockaddr addr_2;
+		struct sockaddr_in6 addr6_2; // Largest member
+		struct sockaddr addr4_2;
+	};
 	int protocol;
 };
 
@@ -85,27 +87,44 @@ struct offloaded_socket_t
 {
 	int sockfd;
 	struct context_t* context;
-	uint8_t direction;
+	enum socket_type_t type;
 };
 
 static inline unsigned int _ring_from_data(const struct offloaded_socket_t* offload_socket)
 {
-	return offload_socket->direction == 0 ? server_to_client_data : client_to_server_data;
+	return offload_socket->type == tcp_server ? server_to_client_data : client_to_server_data;
 }
 
 static inline unsigned int _ring_to_data(const struct offloaded_socket_t* offload_socket)
 {
-	return offload_socket->direction == 0 ? client_to_server_data : server_to_client_data;
+	return offload_socket->type == tcp_server ? client_to_server_data : server_to_client_data;
 }
 
 static inline unsigned int _ring_from_control(const struct offloaded_socket_t* offload_socket)
 {
-	return offload_socket->direction == 0 ? server_to_client_control : client_to_server_control;
+	return offload_socket->type == tcp_server ? server_to_client_control : client_to_server_control;
 }
 
 static inline unsigned int _ring_to_control(const struct offloaded_socket_t* offload_socket)
 {
-	return offload_socket->direction == 0 ? client_to_server_control : server_to_client_control;
+	return offload_socket->type == tcp_server ? client_to_server_control : server_to_client_control;
+}
+
+static inline uint16_t _get_port(const struct sockaddr* addr)
+{
+	const struct sockaddr_in* addr4 = (struct sockaddr_in*) addr;
+	const struct sockaddr_in6* addr6 = (struct sockaddr_in6*) addr;
+
+	if (addr4->sin_family == AF_INET)
+	{
+		return ntohs(addr4->sin_port);
+	}
+	else if (addr6->sin6_family == AF_INET6)
+	{
+		return ntohs(addr6->sin6_port);
+	}
+
+	return 0;
 }
 
 struct offloaded_socket_t* socket_file_map = NULL;
@@ -140,7 +159,7 @@ static void _loopkb_nmq_init()
 	{
 		socket_file_map[i].sockfd = -1;
 		socket_file_map[i].context = NULL;
-		socket_file_map[i].direction = UINT8_MAX;
+		socket_file_map[i].type = unknown;
 	}
 
 	// 127.0.0.1/8
@@ -166,18 +185,10 @@ static void _loopkb_nmq_deinit()
 
 void _loopkb_nmq_socket_info_flip_direction(struct socket_info_t* socket_info)
 {
-	uint32_t ip = socket_info->ipv4.ip_addr_1;
-	uint16_t port = socket_info->port_1;
-	char ip_str[INET6_ADDRSTRLEN];
-	strncpy(ip_str, socket_info->ip_addr_1_str, INET6_ADDRSTRLEN);
-
-	socket_info->ipv4.ip_addr_1 = socket_info->ipv4.ip_addr_2;
-	socket_info->port_1 = socket_info->port_2;
-	strncpy(socket_info->ip_addr_1_str, socket_info->ip_addr_2_str, INET6_ADDRSTRLEN);
-
-	socket_info->ipv4.ip_addr_2 = ip;
-	socket_info->port_2 = port;
-	strncpy(socket_info->ip_addr_2_str, ip_str, INET6_ADDRSTRLEN);
+	struct sockaddr_in6 tmp;
+	memcpy(&tmp, &socket_info->addr6_1, sizeof(struct sockaddr_in6));
+	memcpy(&socket_info->addr6_1, &socket_info->addr6_2, sizeof(struct sockaddr_in6));
+	memcpy(&socket_info->addr6_2, &tmp, sizeof(struct sockaddr_in6));
 }
 
 int _loopkb_nmq_get_socket_info_local(int sockfd, struct socket_info_t* socket_info)
@@ -202,27 +213,11 @@ int _loopkb_nmq_get_socket_info_local(int sockfd, struct socket_info_t* socket_i
 
 	if (addr4->sin_family == AF_INET)
 	{
-		socket_info->family = addr4->sin_family;
-		socket_info->ipv4.ip_addr_1 = *((uint32_t*)(&addr4->sin_addr));
-		socket_info->port_1 = ntohs(addr4->sin_port);
-
-		if (NULL == inet_ntop(AF_INET, &addr4->sin_addr, socket_info->ip_addr_1_str, INET_ADDRSTRLEN))
-		{
-			__loopkb_log(log_level_error, "_loopkb_get_socket_info: Error calling inet_ntop %s", strerror(errno));
-			return -1;
-		}
+		memcpy(&socket_info->addr_1, addr4, sizeof(struct sockaddr_in));
 	}
 	else if (addr6->sin6_family == AF_INET6)
 	{
-		socket_info->family = addr6->sin6_family;
-		memcpy(&socket_info->ipv6.ip_addr_1, &addr6->sin6_addr, sizeof(socket_info->ipv6.ip_addr_1));
-		socket_info->port_1 = ntohs(addr6->sin6_port);
-
-		if (NULL == inet_ntop(AF_INET6, &addr6->sin6_addr, socket_info->ip_addr_1_str, INET6_ADDRSTRLEN))
-		{
-			__loopkb_log(log_level_error, "_loopkb_get_socket_info: Error calling inet_ntop %s", strerror(errno));
-			return -1;
-		}
+		memcpy(&socket_info->addr_1, addr6, sizeof(struct sockaddr_in6));
 	}
 	else
 	{
@@ -256,25 +251,11 @@ int _loopkb_nmq_get_socket_info_remote(int sockfd, struct socket_info_t* socket_
 
 	if (addr4->sin_family == AF_INET)
 	{
-		socket_info->ipv4.ip_addr_2 = *((uint32_t*)(&addr4->sin_addr));
-		socket_info->port_2 = ntohs(addr4->sin_port);
-
-		if (NULL == inet_ntop(AF_INET, &addr4->sin_addr, socket_info->ip_addr_2_str, INET_ADDRSTRLEN))
-		{
-			__loopkb_log(log_level_error, "_loopkb_get_socket_info: Error calling inet_ntop %s", strerror(errno));
-			return -1;
-		}
+		memcpy(&socket_info->addr_2, addr4, sizeof(struct sockaddr_in));
 	}
 	else if (addr6->sin6_family == AF_INET6)
 	{
-		memcpy(&socket_info->ipv6.ip_addr_2, &addr6->sin6_addr, sizeof(socket_info->ipv6.ip_addr_2));
-		socket_info->port_2 = ntohs(addr6->sin6_port);
-
-		if (NULL == inet_ntop(AF_INET6, &addr6->sin6_addr, socket_info->ip_addr_2_str, INET6_ADDRSTRLEN))
-		{
-			__loopkb_log(log_level_error, "_loopkb_get_socket_info: Error calling inet_ntop %s", strerror(errno));
-			return -1;
-		}
+		memcpy(&socket_info->addr_2, addr6, sizeof(struct sockaddr_in6));
 	}
 	else
 	{
@@ -285,7 +266,7 @@ int _loopkb_nmq_get_socket_info_remote(int sockfd, struct socket_info_t* socket_
 	return 0;
 }
 
-int _loopkb_nmq_get_socket_info(int sockfd, struct socket_info_t* socket_info, int direction)
+int _loopkb_nmq_get_socket_info(int sockfd, struct socket_info_t* socket_info, int type)
 {
 	if (_loopkb_nmq_get_socket_info_local(sockfd, socket_info) < 0)
 	{
@@ -297,7 +278,7 @@ int _loopkb_nmq_get_socket_info(int sockfd, struct socket_info_t* socket_info, i
 		return -1;
 	}
 
-	if (direction == 1)
+	if (type == tcp_client)
 	{
 		_loopkb_nmq_socket_info_flip_direction(socket_info);
 	}
@@ -305,44 +286,84 @@ int _loopkb_nmq_get_socket_info(int sockfd, struct socket_info_t* socket_info, i
 	return 0;
 }
 
+char* _loopkb_nmq_inet_ntop(const struct sockaddr* addr, char* retval)
+{
+	const struct sockaddr_in* addr4 = (const struct sockaddr_in*) addr;
+	const struct sockaddr_in6* addr6 = (const struct sockaddr_in6*) addr;
+
+	if (addr4->sin_family == AF_INET)
+	{
+		if (NULL == inet_ntop(AF_INET, &addr4->sin_addr, retval, INET_ADDRSTRLEN))
+		{
+			__loopkb_log(log_level_error, "_loopkb_nmq_inet_ntop: Error calling inet_ntop %s", strerror(errno));
+			return NULL;
+		}
+	}
+	else if (addr6->sin6_family == AF_INET6)
+	{
+		if (NULL == inet_ntop(AF_INET6, &addr6->sin6_addr, retval, INET6_ADDRSTRLEN))
+		{
+			__loopkb_log(log_level_error, "_loopkb_nmq_inet_ntop4: Error calling inet_ntop %s", strerror(errno));
+			return NULL;
+		}
+	}
+
+	return NULL;
+}
+
 void _loopkb_nmq_socket_info_debug(const struct socket_info_t* socket_info)
 {
 	char buffer[256];
 	int len = 256;
-	if (socket_info->family == AF_INET)
+
+	char ip_addr_1_str[INET6_ADDRSTRLEN];
+	char ip_addr_2_str[INET6_ADDRSTRLEN];
+	_loopkb_nmq_inet_ntop(&socket_info->addr_1, ip_addr_1_str);
+	_loopkb_nmq_inet_ntop(&socket_info->addr_2, ip_addr_2_str);
+
+	const uint16_t port_1 = _get_port(&socket_info->addr_1);
+	const uint16_t port_2 = _get_port(&socket_info->addr_2);
+	if (socket_info->addr_1.sa_family == AF_INET)
 	{
-		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv4.%d.%s:%d:%s:%d", socket_info->protocol, socket_info->ip_addr_1_str, socket_info->port_1, socket_info->ip_addr_2_str, socket_info->port_2);
+		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv4.%d.%s:%d:%s:%d", socket_info->protocol, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
 	}
-	else if (socket_info->family == AF_INET6)
+	else if (socket_info->addr_1.sa_family == AF_INET6)
 	{
-		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv6.%d.%s:%d:%s:%d", socket_info->protocol, socket_info->ip_addr_1_str, socket_info->port_1, socket_info->ip_addr_2_str, socket_info->port_2);
+		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv6.%d.%s:%d:%s:%d", socket_info->protocol, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
 	}
 	else
 	{
-		snprintf(buffer, len, LOOPKB_FILE_PREFIX "%d.%d.%u:%d:%u:%d", socket_info->family, socket_info->protocol, socket_info->ipv4.ip_addr_1, socket_info->port_1, socket_info->ipv4.ip_addr_2, socket_info->port_2);
+		// TODO
+		//snprintf(buffer, len, LOOPKB_FILE_PREFIX "%d.%d.%u:%d:%u:%d", socket_info->addr_1.sin_family, socket_info->protocol, socket_info->ipv4.ip_addr_1, port_1, socket_info->ipv4.ip_addr_2, port_2);
 	}
-
-	printf("_loopkb_nmq_socket_info_debug: %s\n", buffer);
 }
 
-const char* _loopkb_nmq_generate_filename_for_socket(int sockfd, struct socket_info_t* socket_info, int direction, char* buffer, size_t len)
+const char* _loopkb_nmq_generate_filename_for_socket(int sockfd, struct socket_info_t* socket_info, int type, char* buffer, size_t len)
 {
 	if (NULL == socket_info)
 	{
-		_loopkb_nmq_get_socket_info(sockfd, socket_info, direction);
+		_loopkb_nmq_get_socket_info(sockfd, socket_info, type);
 	}
 
-	if (socket_info->family == AF_INET)
+	char ip_addr_1_str[INET6_ADDRSTRLEN];
+	char ip_addr_2_str[INET6_ADDRSTRLEN];
+	_loopkb_nmq_inet_ntop(&socket_info->addr_1, ip_addr_1_str);
+	_loopkb_nmq_inet_ntop(&socket_info->addr_2, ip_addr_2_str);
+	const uint16_t port_1 = _get_port(&socket_info->addr_1);
+	const uint16_t port_2 = _get_port(&socket_info->addr_2);
+
+	if (socket_info->addr_1.sa_family == AF_INET)
 	{
-		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv4.%d.%s:%d:%s:%d", socket_info->protocol, socket_info->ip_addr_1_str, socket_info->port_1, socket_info->ip_addr_2_str, socket_info->port_2);
+		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv4.%d.%s:%d:%s:%d", socket_info->protocol, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
 	}
-	else if (socket_info->family == AF_INET6)
+	else if (socket_info->addr_1.sa_family == AF_INET6)
 	{
-		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv6.%d.%s:%d:%s:%d", socket_info->protocol, socket_info->ip_addr_1_str, socket_info->port_1, socket_info->ip_addr_2_str, socket_info->port_2);
+		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv6.%d.%s:%d:%s:%d", socket_info->protocol, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
 	}
 	else
 	{
-		snprintf(buffer, len, LOOPKB_FILE_PREFIX "%d.%d.%u:%d:%u:%d", socket_info->family, socket_info->protocol, socket_info->ipv4.ip_addr_1, socket_info->port_1, socket_info->ipv4.ip_addr_2, socket_info->port_2);
+		// TODO
+		//snprintf(buffer, len, LOOPKB_FILE_PREFIX "%d.%d.%u:%d:%u:%d", socket_info->addr_1.sin_family, socket_info->protocol, socket_info->ipv4.ip_addr_1, port_1, socket_info->ipv4.ip_addr_2, port_2);
 	}
 
 	__loopkb_log(log_level_debug, "_loopkb_nmq_generate_filename_for_socket: Socket %d will use filename %s", sockfd, buffer);
@@ -394,10 +415,10 @@ int _loopkb_nmq_is_offloaded_socket(int sockfd)
 	return _loopkb_nmq_get_index(sockfd);
 }
 
-int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_info, int direction)
+int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_info, int type)
 {
 	__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Adding offloaded socket: %d", sockfd);
-	assert(direction == 0 || direction == 1);
+	assert(type == tcp_server || type == tcp_client);
 	const int index = _loopkb_nmq_get_free_index(sockfd);
 	if (index < 0)
 	{
@@ -408,14 +429,14 @@ int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_in
 	__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Offloaded socket %d uses index %d", sockfd, index);
 
 	char filename[256];
-	_loopkb_nmq_generate_filename_for_socket(sockfd, socket_info, direction, filename, MAX_FILENAME_SIZE);
+	_loopkb_nmq_generate_filename_for_socket(sockfd, socket_info, type, filename, MAX_FILENAME_SIZE);
 	assert(socket_file_map[index].context == NULL);
-	assert(socket_file_map[index].direction == UINT8_MAX);
+	assert(socket_file_map[index].type == unknown);
 	socket_file_map[index].context = malloc(sizeof(struct context_t));
-	socket_file_map[index].direction = direction;
-	__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Socket offloaded: #%d %d (%s) direction: %d", index, sockfd, filename, direction);
+	socket_file_map[index].type = type;
+	__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Socket offloaded: #%d %d (%s) type: %d", index, sockfd, filename, type);
 
-	if (direction == 0)
+	if (type == 0)
 	{
 		__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: context_create");
 		if (context_create(socket_file_map[index].context, filename, total_channels, loopkb_ring_size, loopkb_packet_size) == NULL)
@@ -436,7 +457,7 @@ int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_in
 		}
 		close(fd);
 
-		if (context_open(socket_file_map[index].context, filename, 2, loopkb_ring_size, loopkb_packet_size) == NULL)
+		if (context_open(socket_file_map[index].context, filename, total_channels, loopkb_ring_size, loopkb_packet_size) == NULL)
 		{
 			__loopkb_log(log_level_error, "_loopkb_nmq_add_offloaded_socket: Cannot open context %s: %s", filename, strerror(errno));
 			return -1;
@@ -470,7 +491,7 @@ void _loopkb_nmq_remove_offloaded_socket(int sockfd)
 		const unsigned int ring_to_control = _ring_to_control(&socket_file_map[index]);
 		context_send(socket_file_map[index].context, ring_from_control, ring_to_control, eof, sizeof(eof));
 
-		if (socket_file_map[index].direction == 0)
+		if (socket_file_map[index].type == tcp_server)
 		{
 			__loopkb_log(log_level_debug, "_loopkb_nmq_remove_offloaded_socket: Removing file %s", filename);
 			unlink(filename);
@@ -479,7 +500,7 @@ void _loopkb_nmq_remove_offloaded_socket(int sockfd)
 		context_destroy(socket_file_map[index].context);
 		free(socket_file_map[index].context);
 		socket_file_map[index].context = NULL;
-		socket_file_map[index].direction = UINT8_MAX;
+		socket_file_map[index].type = unknown;
 
 		const int removed_index = _loopkb_nmq_remove_index(index, sockfd);
 		(void) removed_index;
@@ -511,8 +532,18 @@ bool _loopkb_nmq_should_offload_ipv6(__uint128_t ip_addr_1, __uint128_t ip_addr_
 	for (size_t i = 0; i < ipv6_loopback_addresses_count; ++i)
 	{
 		const struct ipv6_address_mask_t* ipv6_address_mask = &ipv6_loopback_addresses[i];
-		if ((ip_addr_1 & ipv6_address_mask->mask) == (ipv6_address_mask->ip_addr & ipv6_address_mask->mask) &&
-				(ip_addr_2 & ipv6_address_mask->mask) == (ipv6_address_mask->ip_addr & ipv6_address_mask->mask))
+
+		__m128i ip_addr_128 = (__m128i) ipv6_address_mask->ip_addr;
+		__m128i ip_addr_1_128 = (__m128i) ip_addr_1;
+		__m128i ip_addr_2_128 = (__m128i) ip_addr_2;
+		__m128i mask_128 = (__m128i) ipv6_address_mask->mask;
+
+		__m128i ip_addr_after_mask = _mm_and_si128(ip_addr_128, mask_128);;
+		__m128i ip_addr_1_after_mask = _mm_and_si128(ip_addr_1_128, mask_128);
+		__m128i ip_addr_2_after_mask = _mm_and_si128(ip_addr_2_128, mask_128);;
+
+		if (memcmp(&ip_addr_after_mask, &ip_addr_1_after_mask, sizeof(__m128i)) == 0 &&
+				memcmp(&ip_addr_after_mask, &ip_addr_2_after_mask, sizeof(__m128i)) == 0)
 		{
 			return true;
 		}
@@ -525,15 +556,25 @@ bool _loopkb_nmq_should_offload_socket(int sockfd, const struct socket_info_t* s
 {
 	if (socket_info->protocol == SOCK_DGRAM || socket_info->protocol == SOCK_STREAM) // Only UDP and TCP
 	{
-		if (socket_info->port_1 != 0 && socket_info->port_2 != 0) // Avoid listening sockets
+		const uint16_t port_1 = _get_port(&socket_info->addr_1);
+		const uint16_t port_2 = _get_port(&socket_info->addr_2);
+		if (port_1 != 0 && port_2 != 0) // Avoid listening sockets
 		{
-			if (socket_info->family == AF_INET)
+			if (socket_info->addr_1.sa_family == AF_INET)
 			{
-				return _loopkb_nmq_should_offload_ipv4(socket_info->ipv4.ip_addr_1, socket_info->ipv4.ip_addr_2);
+				const struct sockaddr_in* addr4_1 = (struct sockaddr_in*) &socket_info->addr_1;
+				const struct sockaddr_in* addr4_2 = (struct sockaddr_in*) &socket_info->addr_2;
+				uint32_t ip_addr_1 = *((uint32_t*)(&addr4_1->sin_addr));
+				uint32_t ip_addr_2 = *((uint32_t*)(&addr4_2->sin_addr));
+				return _loopkb_nmq_should_offload_ipv4(ip_addr_1, ip_addr_2);
 			}
-			else if (socket_info->family == AF_INET6)
+			else if (socket_info->addr_1.sa_family == AF_INET6)
 			{
-				return _loopkb_nmq_should_offload_ipv6(socket_info->ipv6.ip_addr_1, socket_info->ipv6.ip_addr_2);
+				const struct sockaddr_in6* addr6_1 = (struct sockaddr_in6*) &socket_info->addr_1;
+				const struct sockaddr_in6* addr6_2 = (struct sockaddr_in6*) &socket_info->addr_2;
+				__uint128_t ip_addr_1 = *((__uint128_t*)(&addr6_1->sin6_addr));
+				__uint128_t ip_addr_2 = *((__uint128_t*)(&addr6_2->sin6_addr));
+				return _loopkb_nmq_should_offload_ipv6(ip_addr_1, ip_addr_2);
 			}
 		}
 	}
@@ -569,15 +610,15 @@ bool _loopkb_nmq_can_receive(int sockfd)
 	return false;
 }
 
-int _loopkb_nmq_check_add_socket(int sockfd, int direction)
+int _loopkb_nmq_check_add_socket(int sockfd, int type)
 {
 	struct socket_info_t socket_info;
-	if (_loopkb_nmq_get_socket_info(sockfd, &socket_info, direction) >= 0)
+	if (_loopkb_nmq_get_socket_info(sockfd, &socket_info, type) >= 0)
 	{
 		if (_loopkb_nmq_should_offload_socket(sockfd, &socket_info) != 0)
 		{
 			__loopkb_log(log_level_info, "_loopkb_nmq_check_add_socket: Socket %d will be offloaded", sockfd);
-			return _loopkb_nmq_add_offloaded_socket(sockfd, &socket_info, direction);
+			return _loopkb_nmq_add_offloaded_socket(sockfd, &socket_info, type);
 		}
 		else
 		{
@@ -592,16 +633,16 @@ int _loopkb_nmq_check_add_socket(int sockfd, int direction)
 	return -1;
 }
 
-int _loopkb_nmq_socket(int sockfd, int domain, int type, int protocol)
+int _loopkb_nmq_socket(int sockfd, int domain, int type_, int protocol)
 {
-	int direction = 2;
-	return _loopkb_nmq_check_add_socket(sockfd, direction);
+	int type = 2;
+	return _loopkb_nmq_check_add_socket(sockfd, type);
 }
 
 int _loopkb_nmq_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
 	__loopkb_log(log_level_trace, "_loopkb_nmq_connect: %d", sockfd);
-	const int direction = 1;
+	const int type = 1;
 
 	struct socket_info_t socket_info;
 	if (_loopkb_nmq_get_socket_info_local(sockfd, &socket_info) < 0 ||
@@ -610,7 +651,7 @@ int _loopkb_nmq_connect(int sockfd, const struct sockaddr *addr, socklen_t addrl
 		__loopkb_log(log_level_error, "_loopkb_nmq_connect: Error getting socket information - socket %d will not be offloaded", sockfd);
 		return _sys_connect(sockfd, addr, addrlen);
 	}
-	// Flip direction, as direction == 1 (client -> server)
+	// Flip type, as type == 1 (client -> server)
 	_loopkb_nmq_socket_info_flip_direction(&socket_info);
 
 	const bool offloaded = _loopkb_nmq_should_offload_socket(sockfd, &socket_info);
@@ -649,7 +690,7 @@ int _loopkb_nmq_connect(int sockfd, const struct sockaddr *addr, socklen_t addrl
 		return -1;
 	}
 
-	if (_loopkb_nmq_add_offloaded_socket(sockfd, &socket_info, direction) < 0)
+	if (_loopkb_nmq_add_offloaded_socket(sockfd, &socket_info, type) < 0)
 	{
 		return -1;
 	}
@@ -660,8 +701,8 @@ int _loopkb_nmq_connect(int sockfd, const struct sockaddr *addr, socklen_t addrl
 int _loopkb_nmq_accept(int sockfd, const struct sockaddr *addr, socklen_t* addrlen)
 {
 	__loopkb_log(log_level_trace, "_loopkb_nmq_accept: %d", sockfd);
-	const int direction = 0;
-	return _loopkb_nmq_check_add_socket(sockfd, direction);
+	const int type = 0;
+	return _loopkb_nmq_check_add_socket(sockfd, type);
 }
 
 int _loopkb_nmq_close(int fd)
@@ -695,8 +736,6 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 		const unsigned int ring_to = _ring_to_data(&socket_file_map[index]);
 		const unsigned int ring_from_control = _ring_from_control(&socket_file_map[index]);
 		const unsigned int ring_to_control = _ring_to_control(&socket_file_map[index]);
-
-		int flags = fcntl(sockfd, F_GETFL, 0);
 
 		size_t receive_len = loopkb_packet_size;
 		if (flags & SOCK_NONBLOCK)
@@ -780,8 +819,6 @@ ssize_t _loopkb_nmq_send(int sockfd, const void* buf, size_t len, int flags, con
 	const int index = _loopkb_nmq_is_offloaded_socket(sockfd);
 	if (index >= 0)
 	{
-		int flags = fcntl(sockfd, F_GETFL, 0);
-
 		const unsigned int ring_from = _ring_from_data(&socket_file_map[index]);
 		const unsigned int ring_to = _ring_to_data(&socket_file_map[index]);
 		__loopkb_log(log_level_trace, "_loopkb_nmq_send: Socket %d sending %zu bytes (from %u to %u)", sockfd, len, ring_from, ring_to);

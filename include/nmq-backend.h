@@ -18,13 +18,15 @@
     along with loopkb.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <netinet/in.h>
 #include <stdint.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <time.h>
-#include <sys/select.h>
 
 #pragma once
 
+char* _loopkb_nmq_inet_ntop(const struct sockaddr* addr, char* retval);
 int _loopkb_nmq_socket(int sockfd, int domain, int type, int protocol);
 int _loopkb_nmq_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 int _loopkb_nmq_accept(int sockfd, const struct sockaddr *addr, socklen_t* addrlen);
