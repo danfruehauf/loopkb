@@ -50,13 +50,12 @@ recv_function_t _sys_recv = NULL;
 recvfrom_function_t _sys_recvfrom = NULL;
 recvmsg_function_t _sys_recvmsg = NULL;
 
-// Normally for the dlsym line we would have:
-// function_variable = (function_type) dlsym(RTLD_NEXT, #function_name);
-// However, gcc -Wpedantic won't like it, so use this version that does the same, but silences it
+// Need to disable -Wpedantic for that macro, otherwise you can use:
+// *(void **) (&function_variable) = dlsym(RTLD_NEXT, #function_name);
 #define OVERRIDE_FUNCTION(function_type, function_name, function_variable) \
 	if (function_variable == NULL) \
 	{ \
-		*(void **) (&function_variable) = dlsym(RTLD_NEXT, #function_name); \
+		function_variable = (function_type) dlsym(RTLD_NEXT, #function_name); \
 	} \
 
 __attribute__((constructor))
@@ -92,6 +91,8 @@ static void _loopkb_init()
 		_loopkb_banner(stdout);
 	}
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 	OVERRIDE_FUNCTION(socket_function_t, socket, _sys_socket);
 	OVERRIDE_FUNCTION(connect_function_t, connect, _sys_connect);
 	OVERRIDE_FUNCTION(accept_function_t, accept, _sys_accept);
@@ -104,6 +105,7 @@ static void _loopkb_init()
 	OVERRIDE_FUNCTION(recv_function_t, recv, _sys_recv);
 	OVERRIDE_FUNCTION(recvfrom_function_t, recvfrom, _sys_recvfrom);
 	OVERRIDE_FUNCTION(recvmsg_function_t, recvmsg, _sys_recvmsg);
+#pragma GCC diagnostic pop
 }
 
 int _loopkb_banner(FILE* fp)
