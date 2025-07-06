@@ -26,8 +26,11 @@
 #include <sys/socket.h>
 #include <time.h>
 
+#define LOOPKB_PACKET_SIZE_MAX 1500U
+
 // Basic function
-typedef int (*socket_function_t)(int, int, int);
+typedef int (*socket_function_t)(int domain, int type, int protocol);
+typedef int (*bind_function_t)(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 typedef int (*connect_function_t)(int, const struct sockaddr* addr, socklen_t addrlen);
 typedef int (*accept_function_t)(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrlen);
 typedef int (*accept4_function_t)(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrlen, int flags);
@@ -56,6 +59,7 @@ typedef int (*fcntl64_function_t)(int fd, int op, ...);
 int _loopkb_banner(FILE* fp);
 
 int _loopkb_socket(int domain, int type, int protocol);
+int _loopkb_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 int _loopkb_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 int _loopkb_accept(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrlen, int flags);
 int _loopkb_close(int fd);
@@ -81,10 +85,12 @@ int _loopkb_fcntl64(int fd, int op, int arg);
 extern size_t loopkb_debug;
 extern size_t loopkb_ring_size;
 extern size_t loopkb_packet_size;
+extern size_t loopkb_offloaded_packet_size;
 extern size_t loopkb_max_sockets;
 
 // Override functions
 extern socket_function_t _sys_socket;
+extern bind_function_t _sys_bind;
 extern connect_function_t _sys_connect;
 extern accept_function_t _sys_accept;
 extern close_function_t _sys_close;

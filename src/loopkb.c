@@ -34,10 +34,12 @@
 
 size_t loopkb_debug = 0;
 size_t loopkb_ring_size = 15;
-size_t loopkb_packet_size = 1500;
+size_t loopkb_packet_size = LOOPKB_PACKET_SIZE_MAX;
+size_t loopkb_offloaded_packet_size = LOOPKB_PACKET_SIZE_MAX;
 size_t loopkb_max_sockets = 128;
 
 socket_function_t _sys_socket = NULL;
+connect_function_t _sys_bind = NULL;
 connect_function_t _sys_connect = NULL;
 accept_function_t _sys_accept = NULL;
 accept4_function_t _sys_accept4 = NULL;
@@ -86,7 +88,13 @@ static void _loopkb_init()
 	if (getenv("LOOPKB_PACKET_SIZE") != NULL)
 	{
 		loopkb_packet_size = atoi(getenv("LOOPKB_PACKET_SIZE"));
+		if (loopkb_packet_size > LOOPKB_PACKET_SIZE_MAX)
+		{
+			loopkb_packet_size = LOOPKB_PACKET_SIZE_MAX;
+			__loopkb_log(log_level_warning, "Cannot set LOOPKB_PACKET_SIZE=%d, maximum is %zu", loopkb_packet_size, LOOPKB_PACKET_SIZE_MAX);
+		}
 	}
+	loopkb_offloaded_packet_size = loopkb_packet_size + loopkb_offloaded_packet_payload_size;
 
 	if (getenv("LOOPKB_MAX_SOCKETS") != NULL)
 	{
@@ -101,6 +109,7 @@ static void _loopkb_init()
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 	OVERRIDE_FUNCTION(socket_function_t, socket, _sys_socket);
+	OVERRIDE_FUNCTION(bind_function_t, bind, _sys_bind);
 	OVERRIDE_FUNCTION(connect_function_t, connect, _sys_connect);
 	OVERRIDE_FUNCTION(accept_function_t, accept, _sys_accept);
 	OVERRIDE_FUNCTION(close_function_t, close, _sys_close);
@@ -152,6 +161,18 @@ int _loopkb_socket(int domain, int type, int protocol)
 		_loopkb_nmq_socket(sockfd, domain, type, protocol);
 	}
 	return sockfd;
+}
+
+int _loopkb_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+{
+	__loopkb_log(log_level_trace, "_loopkb_bind %d", sockfd);
+
+	int retval = _sys_bind(sockfd, addr, addrlen);
+	if (retval >= 0)
+	{
+		_loopkb_nmq_bind(sockfd, addr, addrlen);
+	}
+	return retval;
 }
 
 int _loopkb_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
@@ -328,6 +349,12 @@ VISIBILITY_DEFAULT
 int socket(int domain, int type, int protocol)
 {
 	return _loopkb_socket(domain, type, protocol);
+}
+
+VISIBILITY_DEFAULT
+int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+{
+	return _loopkb_bind(sockfd, addr, addrlen);
 }
 
 VISIBILITY_DEFAULT

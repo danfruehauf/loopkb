@@ -232,7 +232,7 @@ bool context_can_send(struct context_t* context_, unsigned int from, unsigned in
 	return t != h;
 }
 
-bool context_recv_ring(struct context_t* context_, struct ring *ring, void* msg, size_t* size)
+bool context_recv_ring(struct context_t* context_, struct ring *ring, void* msg, size_t* size, bool peek)
 {
 	unsigned int t = ring->_tail;
 	unsigned int h = ring->_head;
@@ -247,6 +247,9 @@ bool context_recv_ring(struct context_t* context_, struct ring *ring, void* msg,
 	*size = recv_size;
 	memcpy(msg, d + sizeof(size_t), recv_size);
 
+	if (peek)
+		return true;
+
 	// Barrier is needed to make sure that we finished reading the item
 	// before moving the head
 	__comp();
@@ -255,16 +258,16 @@ bool context_recv_ring(struct context_t* context_, struct ring *ring, void* msg,
 	return true;
 }
 
-bool context_recv(struct context_t* context_, unsigned int from, unsigned int to, void* msg, size_t* size)
+bool context_recv(struct context_t* context_, unsigned int from, unsigned int to, void* msg, size_t* size, bool peek)
 {
 	struct ring *ring = context_get_ring(context_, to, from);
-	while (!context_recv_ring(context_, ring, msg, size)) __relax();
+	while (!context_recv_ring(context_, ring, msg, size, peek)) __relax();
 	return true;
 }
 
-bool context_recvnb(struct context_t* context_, unsigned int from, unsigned int to, void* s, size_t* size)
+bool context_recvnb(struct context_t* context_, unsigned int from, unsigned int to, void* s, size_t* size, bool peek)
 {
-	return context_recv_ring(context_, context_get_ring(context_, to, from), s, size);
+	return context_recv_ring(context_, context_get_ring(context_, to, from), s, size, peek);
 }
 
 bool context_can_recv(struct context_t* context_, unsigned int from, unsigned int to)
