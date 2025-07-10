@@ -40,6 +40,7 @@ size_t loopkb_max_sockets = 128;
 socket_function_t _sys_socket = NULL;
 connect_function_t _sys_connect = NULL;
 accept_function_t _sys_accept = NULL;
+accept4_function_t _sys_accept4 = NULL;
 close_function_t _sys_close = NULL;
 select_function_t _sys_select = NULL;
 pselect_function_t _sys_pselect = NULL;
@@ -98,13 +99,18 @@ static void _loopkb_init()
 	OVERRIDE_FUNCTION(accept_function_t, accept, _sys_accept);
 	OVERRIDE_FUNCTION(close_function_t, close, _sys_close);
 	OVERRIDE_FUNCTION(select_function_t, select, _sys_select);
-	OVERRIDE_FUNCTION(pselect_function_t, pselect, _sys_pselect);
 	OVERRIDE_FUNCTION(send_function_t, send, _sys_send);
 	OVERRIDE_FUNCTION(sendto_function_t, sendto, _sys_sendto);
 	OVERRIDE_FUNCTION(sendmsg_function_t, sendmsg, _sys_sendmsg);
 	OVERRIDE_FUNCTION(recv_function_t, recv, _sys_recv);
 	OVERRIDE_FUNCTION(recvfrom_function_t, recvfrom, _sys_recvfrom);
 	OVERRIDE_FUNCTION(recvmsg_function_t, recvmsg, _sys_recvmsg);
+
+#ifdef _GNU_SOURCE
+	OVERRIDE_FUNCTION(accept4_function_t, accept4, _sys_accept4);
+	OVERRIDE_FUNCTION(pselect_function_t, pselect, _sys_pselect);
+#endif
+
 #pragma GCC diagnostic pop
 }
 
@@ -142,14 +148,19 @@ int _loopkb_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 	return _loopkb_nmq_connect(sockfd, addr, addrlen);
 }
 
-int _loopkb_accept(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrlen)
+int _loopkb_accept(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrlen, int flags)
 {
 	__loopkb_log(log_level_trace, "_loopkb_accept %d", sockfd);
 
+#ifdef _GNU_SOURCE
+	int client_sock = _sys_accept4(sockfd, addr, addrlen, flags);
+#else
 	int client_sock = _sys_accept(sockfd, addr, addrlen);
+	flags = 0;
+#endif
 	if (client_sock >= 0)
 	{
-		_loopkb_nmq_accept(client_sock, addr, addrlen);
+		_loopkb_nmq_accept(client_sock, addr, addrlen, flags);
 	}
 	else
 	{
@@ -260,7 +271,14 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 VISIBILITY_DEFAULT
 int accept(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrlen)
 {
-	return _loopkb_accept(sockfd, addr, addrlen);
+	const int flags = 0;
+	return _loopkb_accept(sockfd, addr, addrlen, flags);
+}
+
+VISIBILITY_DEFAULT
+int accept4(int sockfd, struct sockaddr *restrict addr, socklen_t *restrict addrlen, int flags)
+{
+	return _loopkb_accept(sockfd, addr, addrlen, flags);
 }
 
 VISIBILITY_DEFAULT

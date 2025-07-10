@@ -29,7 +29,7 @@
 char* _loopkb_nmq_inet_ntop(const struct sockaddr* addr, char* retval);
 int _loopkb_nmq_socket(int sockfd, int domain, int type, int protocol);
 int _loopkb_nmq_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
-int _loopkb_nmq_accept(int sockfd, const struct sockaddr *addr, socklen_t* addrlen);
+int _loopkb_nmq_accept(int sockfd, const struct sockaddr *addr, socklen_t* addrlen, int flags);
 int _loopkb_nmq_close(int fd);
 ssize_t _loopkb_nmq_send(int sockfd, const void* buf, size_t len, int flags, const struct sockaddr* dest_addr, socklen_t addrlen);
 ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct sockaddr* src_addr, socklen_t* addrlen);

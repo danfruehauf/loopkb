@@ -29,6 +29,7 @@
 typedef int (*socket_function_t)(int, int, int);
 typedef int (*connect_function_t)(int, const struct sockaddr* addr, socklen_t addrlen);
 typedef int (*accept_function_t)(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrlen);
+typedef int (*accept4_function_t)(int sockfd, struct sockaddr *restrict addr, socklen_t *restrict addrlen, int flags);
 typedef int (*close_function_t)(int fd);
 typedef int (*select_function_t)(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, struct timeval *restrict timeout);
 typedef int (*pselect_function_t)(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, const struct timespec *restrict timeout, const sigset_t* restrict sigmask);
@@ -47,7 +48,7 @@ int _loopkb_banner(FILE* fp);
 
 int _loopkb_socket(int domain, int type, int protocol);
 int _loopkb_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
-int _loopkb_accept(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrlen);
+int _loopkb_accept(int sockfd, struct sockaddr *restrict addr, socklen_t *restrict addrlen, int flags);
 int _loopkb_close(int fd);
 int _loopkb_select(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, struct timeval *restrict timeout);
 int _loopkb_pselect(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, const struct timespec *restrict timeout, const sigset_t* restrict sigmask);

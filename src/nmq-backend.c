@@ -698,8 +698,9 @@ int _loopkb_nmq_connect(int sockfd, const struct sockaddr *addr, socklen_t addrl
 	return retval;
 }
 
-int _loopkb_nmq_accept(int sockfd, const struct sockaddr *addr, socklen_t* addrlen)
+int _loopkb_nmq_accept(int sockfd, const struct sockaddr *addr, socklen_t* addrlen, int flags)
 {
+	// TODO Consider flags
 	__loopkb_log(log_level_trace, "_loopkb_nmq_accept: %d", sockfd);
 	const int type = 0;
 	return _loopkb_nmq_check_add_socket(sockfd, type);
@@ -891,7 +892,21 @@ int _loopkb_nmq_pselect(int nfds, fd_set *restrict readfds, fd_set *restrict wri
 	if (offloaded_sockets == 0)
 	{
 		__loopkb_log(log_level_info, "_loopkb_nmq_pselect: Returning _sys_select - no offloaded sockets");
+#ifdef _GNU_SOURCE
 		return _sys_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
+#else
+		if (NULL == timeout)
+		{
+			return _sys_select(nfds, readfds, writefds, exceptfds, NULL);
+		}
+		else
+		{
+			struct timeval tv;
+			tv.tv_sec = timeout->tv_sec;
+			tv.tv_usec = timeout->tv_nsec * 1000;
+			return _sys_select(nfds, readfds, writefds, exceptfds, &tv);
+		}
+#endif
 	}
 
 	sigset_t sigmask_prev;
@@ -919,10 +934,6 @@ int _loopkb_nmq_pselect(int nfds, fd_set *restrict readfds, fd_set *restrict wri
 	}
 	const __int64_t finish_ns = now_ns + timeout_ns;
 
-	struct timespec sys_select_1_ns;
-	sys_select_1_ns.tv_sec = 0;
-	sys_select_1_ns.tv_nsec = 1;
-
 	bool has_data = false;
 
 	do
@@ -949,7 +960,17 @@ int _loopkb_nmq_pselect(int nfds, fd_set *restrict readfds, fd_set *restrict wri
 		}
 
 		// Do not use sigmask here, as we manage it from outside of pselect()
+#ifdef _GNU_SOURCE
+		struct timespec sys_select_1_ns;
+		sys_select_1_ns.tv_sec = 0;
+		sys_select_1_ns.tv_nsec = 1;
 		int sys_select_retval = _sys_pselect(nfds, sys_select_readfds, sys_select_writefds, sys_select_exceptfds, &sys_select_1_ns, NULL);
+#else
+		struct timeval sys_select_1_us;
+		sys_select_1_us.tv_sec = 0;
+		sys_select_1_us.tv_usec = 1;
+		int sys_select_retval = _sys_select(nfds, sys_select_readfds, sys_select_writefds, sys_select_exceptfds, &sys_select_1_us);
+#endif
 		if (sys_select_retval > 0)
 		{
 			merge_fds(&retval_readfds, sys_select_readfds);
