@@ -86,6 +86,7 @@ struct socket_info_t
 struct offloaded_socket_t
 {
 	int sockfd;
+	int flags;
 	struct context_t* context;
 	enum socket_type_t type;
 };
@@ -158,6 +159,7 @@ static void _loopkb_nmq_init()
 	for (size_t i = 0; i < loopkb_max_sockets; ++i)
 	{
 		socket_file_map[i].sockfd = -1;
+		socket_file_map[i].flags = 0;
 		socket_file_map[i].context = NULL;
 		socket_file_map[i].type = unknown;
 	}
@@ -497,6 +499,7 @@ void _loopkb_nmq_remove_offloaded_socket(int sockfd)
 			unlink(filename);
 		}
 
+		socket_file_map[index].flags = 0;
 		context_destroy(socket_file_map[index].context);
 		free(socket_file_map[index].context);
 		socket_file_map[index].context = NULL;
@@ -662,17 +665,11 @@ int _loopkb_nmq_connect(int sockfd, const struct sockaddr *addr, socklen_t addrl
 	}
 
 	int flags = 0;
-	if (fcntl(sockfd, F_GETFL, flags) != 0)
-	{
-		// Always getting here: 107 Transport endpoint is not connected)
-		//__loopkb_log(log_level_error, "_loopkb_nmq_connect: fcntl/F_GETFL socket %d (%d %s), socket will not be offloaded", sockfd, errno, strerror(errno));
-		//return _sys_connect(sockfd, addr, addrlen);
-	}
-
+	flags = _sys_fcntl(sockfd, F_GETFL, flags);
 	int orig_flags = flags;
 	flags &= ~SOCK_NONBLOCK;
 
-	if (fcntl(sockfd, F_SETFL, flags) != 0)
+	if (_sys_fcntl(sockfd, F_SETFL, flags) != 0)
 	{
 		__loopkb_log(log_level_error, "_loopkb_nmq_connect: fcntl/F_SETFL %d, socket will not be offloaded", sockfd);
 		return _sys_connect(sockfd, addr, addrlen);
@@ -684,7 +681,7 @@ int _loopkb_nmq_connect(int sockfd, const struct sockaddr *addr, socklen_t addrl
 		return retval;
 	}
 
-	if (fcntl(sockfd, F_SETFL, orig_flags) != 0)
+	if (_sys_fcntl(sockfd, F_SETFL, orig_flags) != 0)
 	{
 		__loopkb_log(log_level_error, "_loopkb_nmq_connect: fcntl/F_SETFL %d", sockfd);
 		return -1;
@@ -732,6 +729,8 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 	const int index = _loopkb_nmq_is_offloaded_socket(sockfd);
 	if (index >= 0)
 	{
+		flags = socket_file_map[index].flags | flags;
+
 		// Flip direction for recv
 		const unsigned int ring_from = _ring_from_data(&socket_file_map[index]);
 		const unsigned int ring_to = _ring_to_data(&socket_file_map[index]);
@@ -820,6 +819,8 @@ ssize_t _loopkb_nmq_send(int sockfd, const void* buf, size_t len, int flags, con
 	const int index = _loopkb_nmq_is_offloaded_socket(sockfd);
 	if (index >= 0)
 	{
+		flags = socket_file_map[index].flags | flags;
+
 		const unsigned int ring_from = _ring_from_data(&socket_file_map[index]);
 		const unsigned int ring_to = _ring_to_data(&socket_file_map[index]);
 		__loopkb_log(log_level_trace, "_loopkb_nmq_send: Socket %d sending %zu bytes (from %u to %u)", sockfd, len, ring_from, ring_to);
@@ -1165,4 +1166,35 @@ int _loopkb_nmq_ppoll(struct pollfd* fds, nfds_t nfds, const struct timespec* tm
 	}
 
 	return retval;
+}
+
+int _loopkb_nmq_fcntl64(int fd, int op, int arg)
+{
+	__loopkb_log(log_level_trace, "_loopkb_nmq_fcntl64: fd %d op %d arg %d", fd, op, arg);
+	const int index = _loopkb_nmq_is_offloaded_socket(fd);
+	if (index < 0)
+	{
+		return -1;
+	}
+
+	switch (op)
+	{
+	case F_SETFL:
+	{
+		__loopkb_log(log_level_debug, "_loopkb_nmq_fcntl64: fd %d op %d F_SETFL %d", fd, op, arg);
+		socket_file_map[index].flags = arg;
+		return 0;
+	}
+	case F_GETFL:
+	{
+		__loopkb_log(log_level_debug, "_loopkb_nmq_fcntl64: fd %d op %d F_GETFL %d", fd, op, socket_file_map[index].flags);
+		return socket_file_map[index].flags;
+	}
+	default:
+	{
+		return -1;
+	}
+	} // switch
+
+	return -1;
 }

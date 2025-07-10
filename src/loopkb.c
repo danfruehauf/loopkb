@@ -54,6 +54,8 @@ recv_function_t _sys_recv = NULL;
 recvfrom_function_t _sys_recvfrom = NULL;
 recvmsg_function_t _sys_recvmsg = NULL;
 read_function_t _sys_read = NULL;
+fcntl_function_t _sys_fcntl = NULL;
+fcntl64_function_t _sys_fcntl64 = NULL;
 
 // Need to disable -Wpedantic for that macro, otherwise you can use:
 // *(void **) (&function_variable) = dlsym(RTLD_NEXT, #function_name);
@@ -112,6 +114,8 @@ static void _loopkb_init()
 	OVERRIDE_FUNCTION(recvfrom_function_t, recvfrom, _sys_recvfrom);
 	OVERRIDE_FUNCTION(recvmsg_function_t, recvmsg, _sys_recvmsg);
 	OVERRIDE_FUNCTION(read_function_t, read, _sys_read);
+	OVERRIDE_FUNCTION(fcntl_function_t, fcntl, _sys_fcntl);
+	OVERRIDE_FUNCTION(fcntl64_function_t, fcntl64, _sys_fcntl64);
 
 #ifdef _GNU_SOURCE
 	OVERRIDE_FUNCTION(accept4_function_t, accept4, _sys_accept4);
@@ -300,6 +304,26 @@ ssize_t _loopkb_read(int fd, void* buf, size_t count)
 	return _sys_read(fd, buf, count);
 }
 
+int _loopkb_fcntl(int fd, int op, int arg)
+{
+	const ssize_t offload_fcntl_retval = _loopkb_nmq_fcntl64(fd, op, arg);
+	if (offload_fcntl_retval >= 0)
+	{
+		return offload_fcntl_retval;
+	}
+	return _sys_fcntl(fd, op, arg);
+}
+
+int _loopkb_fcntl64(int fd, int op, int arg)
+{
+	const ssize_t offload_fcntl_retval = _loopkb_nmq_fcntl64(fd, op, arg);
+	if (offload_fcntl_retval >= 0)
+	{
+		return offload_fcntl_retval;
+	}
+	return _sys_fcntl64(fd, op, arg);
+}
+
 VISIBILITY_DEFAULT
 int socket(int domain, int type, int protocol)
 {
@@ -350,7 +374,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 }
 
 VISIBILITY_DEFAULT
-int ppoll(struct pollfd *fds, nfds_t nfds, const struct timespec *tmo_p, const sigset_t *sigmask)
+int ppoll(struct pollfd *fds, nfds_t nfds, const struct timespec *tmo_p, const sigset_t* sigmask)
 {
 	return _loopkb_ppoll(fds, nfds, tmo_p, sigmask);
 }
@@ -401,4 +425,26 @@ VISIBILITY_DEFAULT
 ssize_t read(int fd, void* buf, size_t count)
 {
 	return _loopkb_read(fd, buf, count);
+}
+
+VISIBILITY_DEFAULT
+int fcntl(int fd, int op, ...)
+{
+	va_list va;
+	va_start(va, op);
+	unsigned long int arg = va_arg(va, unsigned long int);
+	va_end(va);
+
+	return _loopkb_fcntl(fd, op, arg);
+}
+
+VISIBILITY_DEFAULT
+int fcntl64(int fd, int op, ...)
+{
+	va_list va;
+	va_start(va, op);
+	unsigned long int arg = va_arg(va, unsigned long int);
+	va_end(va);
+
+	return _loopkb_fcntl(fd, op, arg);
 }

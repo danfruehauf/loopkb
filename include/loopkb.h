@@ -49,6 +49,10 @@ typedef ssize_t (*recvfrom_function_t)(int sockfd, void* buf, size_t len, int fl
 typedef ssize_t (*recvmsg_function_t)(int sockfd, struct msghdr *msg, int flags);
 typedef ssize_t (*read_function_t)(int fd, void* buf, size_t count);
 
+// misc
+typedef int (*fcntl_function_t)(int fd, int op, ...);
+typedef int (*fcntl64_function_t)(int fd, int op, ...);
+
 int _loopkb_banner(FILE* fp);
 
 int _loopkb_socket(int domain, int type, int protocol);
@@ -69,6 +73,9 @@ ssize_t _loopkb_recv(int sockfd, void* buf, size_t len, int flags);
 ssize_t _loopkb_recvfrom(int sockfd, void* buf, size_t len, int flags, struct sockaddr *restrict src_addr, socklen_t* restrict addrlen);
 ssize_t _loopkb_recvmsg(int sockfd, struct msghdr *msg, int flags);
 ssize_t _loopkb_read(int fd, void* buf, size_t count);
+
+int _loopkb_fcntl(int fd, int op, int arg);
+int _loopkb_fcntl64(int fd, int op, int arg);
 
 // Configuration variables
 extern size_t loopkb_debug;
@@ -93,3 +100,5 @@ extern recv_function_t _sys_recv;
 extern recvfrom_function_t _sys_recvfrom;
 extern recvmsg_function_t _sys_recvmsg;
 extern read_function_t _sys_read;
+extern fcntl_function_t _sys_fcntl;
+extern fcntl64_function_t _sys_fcntl64;

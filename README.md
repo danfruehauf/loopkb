@@ -85,7 +85,7 @@ Lots, to begin with. But here is a partial list:
    * ~~poll()~~
    * epoll()
    * recvmsg()/recvmmsg()
-   * fcntl() (With `SOL_SOCKET`)
+   * ~~fcntl() (With `F_SETFL/SOCK_NONBLOCK`)~~
  * Allow for non-bound UDP sockets (sendto(), recvfrom())
  * Add more configuration via environment variables, like:
    * Directory to keep ring buffers files in
