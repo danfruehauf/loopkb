@@ -47,9 +47,11 @@ pselect_function_t _sys_pselect = NULL;
 send_function_t _sys_send = NULL;
 sendto_function_t _sys_sendto = NULL;
 sendmsg_function_t _sys_sendmsg = NULL;
+write_function_t _sys_write = NULL;
 recv_function_t _sys_recv = NULL;
 recvfrom_function_t _sys_recvfrom = NULL;
 recvmsg_function_t _sys_recvmsg = NULL;
+read_function_t _sys_read = NULL;
 
 // Need to disable -Wpedantic for that macro, otherwise you can use:
 // *(void **) (&function_variable) = dlsym(RTLD_NEXT, #function_name);
@@ -102,9 +104,11 @@ static void _loopkb_init()
 	OVERRIDE_FUNCTION(send_function_t, send, _sys_send);
 	OVERRIDE_FUNCTION(sendto_function_t, sendto, _sys_sendto);
 	OVERRIDE_FUNCTION(sendmsg_function_t, sendmsg, _sys_sendmsg);
+	OVERRIDE_FUNCTION(write_function_t, write, _sys_write);
 	OVERRIDE_FUNCTION(recv_function_t, recv, _sys_recv);
 	OVERRIDE_FUNCTION(recvfrom_function_t, recvfrom, _sys_recvfrom);
 	OVERRIDE_FUNCTION(recvmsg_function_t, recvmsg, _sys_recvmsg);
+	OVERRIDE_FUNCTION(read_function_t, read, _sys_read);
 
 #ifdef _GNU_SOURCE
 	OVERRIDE_FUNCTION(accept4_function_t, accept4, _sys_accept4);
@@ -230,6 +234,17 @@ ssize_t _loopkb_sendmsg(int sockfd, const struct msghdr *msg, int flags)
 	return _sys_sendmsg(sockfd, msg, flags);
 }
 
+ssize_t _loopkb_write(int fd, const void* buf, size_t count)
+{
+	const int flags = 0;
+	const ssize_t offload_send_retval = _loopkb_nmq_send(fd, buf, count, flags, NULL, 0);
+	if (offload_send_retval >= 0)
+	{
+		return offload_send_retval;
+	}
+	return _sys_write(fd, buf, count);
+}
+
 ssize_t _loopkb_recv(int sockfd, void* buf, size_t len, int flags)
 {
 	const ssize_t offload_recv_retval = _loopkb_nmq_receive(sockfd, buf, len, flags, NULL, 0);
@@ -256,6 +271,17 @@ ssize_t _loopkb_recvmsg(int sockfd, struct msghdr *msg, int flags)
 	return _sys_recvmsg(sockfd, msg, flags);
 }
 
+ssize_t _loopkb_read(int fd, void* buf, size_t count)
+{
+	const int flags = 0;
+	const ssize_t offload_recv_retval = _loopkb_nmq_receive(fd, buf, count, flags, NULL, 0);
+	if (offload_recv_retval >= 0)
+	{
+		return offload_recv_retval;
+	}
+	return _sys_read(fd, buf, count);
+}
+
 VISIBILITY_DEFAULT
 int socket(int domain, int type, int protocol)
 {
@@ -276,7 +302,7 @@ int accept(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrl
 }
 
 VISIBILITY_DEFAULT
-int accept4(int sockfd, struct sockaddr *restrict addr, socklen_t *restrict addrlen, int flags)
+int accept4(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrlen, int flags)
 {
 	return _loopkb_accept(sockfd, addr, addrlen, flags);
 }
@@ -318,6 +344,12 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 }
 
 VISIBILITY_DEFAULT
+ssize_t write(int fd, const void* buf, size_t count)
+{
+	return _loopkb_write(fd, buf, count);
+}
+
+VISIBILITY_DEFAULT
 ssize_t recv(int sockfd, void* buf, size_t len, int flags)
 {
 	return _loopkb_recv(sockfd, buf, len, flags);
@@ -333,4 +365,10 @@ VISIBILITY_DEFAULT
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
 	return _loopkb_recvmsg(sockfd, msg, flags);
+}
+
+VISIBILITY_DEFAULT
+ssize_t read(int fd, void* buf, size_t count)
+{
+	return _loopkb_read(fd, buf, count);
 }
