@@ -83,7 +83,7 @@ static void _loopkb_init()
 
 	if (getenv("LOOPKB_MAX_SOCKETS") != NULL)
 	{
-		loopkb_packet_size = atoi(getenv("LOOPKB_MAX_SOCKETS"));
+		loopkb_max_sockets = atoi(getenv("LOOPKB_MAX_SOCKETS"));
 	}
 
 	if (loopkb_debug > 0)
