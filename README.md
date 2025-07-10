@@ -1,5 +1,5 @@
 # LoopKB
-Kernel Bypass for loopback communications.
+Transparent Kernel Bypass library for loopback communications.
 
 Started as a toy project, after realising Kernel Bypass libraries have no loopback acceleration:
  * libvma - No support
@@ -13,7 +13,7 @@ or a contribution.
 
 ## Build
 ```
-$ (mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release ..  && cmake --build .)
+$ (mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release ..  && cmake --build . && ctest)
 ```
 
 ## Example Usage
@@ -83,7 +83,9 @@ sockperf: ---> <MIN> observation =    0.285
 Lots, to begin with. But here is a partial list:
  * Implement more system calls, notably:
    * poll()
+   * epoll()
    * recvmsg()/recvmmsg()
+   * fcntl() (With `SOL_SOCKET`)
  * Allow for non-bound UDP sockets (sendto(), recvfrom())
  * Add more configuration via environment variables, like:
    * Directory to keep ring buffers files in
