@@ -82,7 +82,7 @@ int _loopkb_fcntl(int fd, int op, int arg);
 int _loopkb_fcntl64(int fd, int op, int arg);
 
 // Configuration variables
-extern size_t loopkb_debug;
+extern char loopkb_log_level[16];
 extern size_t loopkb_ring_size;
 extern size_t loopkb_packet_size;
 extern size_t loopkb_offloaded_packet_size;

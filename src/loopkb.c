@@ -32,7 +32,8 @@
 
 #define VISIBILITY_DEFAULT __attribute__((__visibility__("default")))
 
-size_t loopkb_debug = 0;
+char loopkb_log_level[16];
+size_t loopkb_trace = 0;
 size_t loopkb_ring_size = 15;
 size_t loopkb_packet_size = LOOPKB_PACKET_SIZE_MAX;
 size_t loopkb_offloaded_packet_size = LOOPKB_PACKET_SIZE_MAX;
@@ -73,11 +74,45 @@ static void _loopkb_init()
 	loopkb_log_level_stdout = log_level_error;
 	loopkb_log_level_stderr = log_level_error;
 
-	if (getenv("LOOPKB_DEBUG") != NULL && strcmp(getenv("LOOPKB_DEBUG"), "1") == 0)
+	strcpy(loopkb_log_level, "warn");
+
+	const char* loopkb_log_level_ = getenv("LOOPKB_LOG_LEVEL");
+	if (NULL != loopkb_log_level_)
 	{
-		loopkb_debug = 1;
-		loopkb_log_level_stdout = log_level_debug;
-		loopkb_log_level_stderr = log_level_debug;
+		if (strncasecmp(loopkb_log_level_, "error", 5) == 0)
+		{
+			loopkb_log_level_stdout = log_level_error;
+			loopkb_log_level_stderr = log_level_error;
+			strcpy(loopkb_log_level, loopkb_log_level_);
+		}
+		else if (strncasecmp(loopkb_log_level_, "warn", 4) == 0)
+		{
+			loopkb_log_level_stdout = log_level_warning;
+			loopkb_log_level_stderr = log_level_warning;
+			strcpy(loopkb_log_level, loopkb_log_level_);
+		}
+		else if (strncasecmp(loopkb_log_level_, "info", 4) == 0)
+		{
+			loopkb_log_level_stdout = log_level_info;
+			loopkb_log_level_stderr = log_level_info;
+			strcpy(loopkb_log_level, loopkb_log_level_);
+		}
+		else if (strncasecmp(loopkb_log_level_, "debug", 5) == 0)
+		{
+			loopkb_log_level_stdout = log_level_debug;
+			loopkb_log_level_stderr = log_level_debug;
+			strcpy(loopkb_log_level, loopkb_log_level_);
+		}
+		else if (strncasecmp(loopkb_log_level_, "trace", 5) == 0)
+		{
+			loopkb_log_level_stdout = log_level_trace;
+			loopkb_log_level_stderr = log_level_trace;
+			strcpy(loopkb_log_level, loopkb_log_level_);
+		}
+		else
+		{
+			__loopkb_log(log_level_error, "Unsupported LOOPKB_LOG_LEVEL=%s", loopkb_log_level_);
+		}
 	}
 
 	if (getenv("LOOPKB_RING_SIZE") != NULL)
@@ -101,7 +136,7 @@ static void _loopkb_init()
 		loopkb_max_sockets = atoi(getenv("LOOPKB_MAX_SOCKETS"));
 	}
 
-	if (loopkb_debug > 0)
+	if (loopkb_log_level_stdout <= log_level_debug)
 	{
 		_loopkb_banner(stdout);
 	}
@@ -143,7 +178,8 @@ int _loopkb_banner(FILE* fp)
 	retval += fprintf(fp, "============================\n");
 	retval += fprintf(fp, "========== LoopKB ==========\n");
 	retval += fprintf(fp, "============================\n");
-	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_DEBUG", column_width, loopkb_debug);
+	retval += fprintf(fp, "%-*s = %-*s\n", column_width, "LOOPKB_LOG_LEVEL", column_width, loopkb_log_level);
+	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_TRACE", column_width, loopkb_trace);
 	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_RING_SIZE", column_width, loopkb_ring_size);
 	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_PACKET_SIZE", column_width, loopkb_packet_size);
 	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_MAX_SOCKETS", column_width, loopkb_max_sockets);

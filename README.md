@@ -74,7 +74,7 @@ sockperf: ---> <MIN> observation =    0.285
 # Environment Variables
 | Name               | Default Value | Description                                   |
 |--------------------|---------------|-----------------------------------------------|
-| LOOPKB_DEBUG       | unset         | If set to 1, spews some debugging information |
+| LOOPKB_LOG_LEVEL   | warn          | Can be trace, debug, info, warn, error        |
 | LOOPKB_RING_SIZE   | 15            | Number of items in each ring buffer           |
 | LOOPKB_PACKET_SIZE | 1500          | Max item size in each ring buffer             |
 | LOOPKB_MAX_SOCKETS | 128           | Max offloaded sockets                         |
