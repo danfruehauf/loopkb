@@ -72,12 +72,13 @@ sockperf: ---> <MIN> observation =    0.285
 ```
 
 # Environment Variables
-| Name               | Default Value | Description                                   |
-|--------------------|---------------|-----------------------------------------------|
-| LOOPKB_LOG_LEVEL   | warn          | Can be trace, debug, info, warn, error        |
-| LOOPKB_RING_SIZE   | 15            | Number of items in each ring buffer           |
-| LOOPKB_PACKET_SIZE | 1500          | Max item size in each ring buffer             |
-| LOOPKB_MAX_SOCKETS | 128           | Max offloaded sockets                         |
+| Name               | Default Value     | Description                                   |
+|--------------------|-------------------|-----------------------------------------------|
+| LOOPKB_LOG_LEVEL   | warn              | Can be trace, debug, info, warn, error        |
+| LOOPKB_RING_SIZE   | 15                | Number of items in each ring buffer           |
+| LOOPKB_PACKET_SIZE | 1500              | Max item size in each ring buffer             |
+| LOOPKB_MAX_SOCKETS | 128               | Max offloaded sockets                         |
+| LOOPKB_SOCEKT_DIR  | nil (current dir) | Directory to keep socket/context files        |
 
 ## TODO
 Lots, to begin with. But here is a partial list:
@@ -89,7 +90,7 @@ Lots, to begin with. But here is a partial list:
  * ~~Allow non-bound UDP sockets (sendto(), recvfrom())~~
    * ~~Allow "connected" UDP sockets~~
  * Add more configuration via environment variables, like:
-   * Directory to keep ring buffers files in
+   * ~~Directory to keep ring buffers files in~~
    * Sockets/endpoints to offload
  * Better cleanup of artifact files
 
