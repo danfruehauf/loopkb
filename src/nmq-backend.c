@@ -401,18 +401,21 @@ const char* _loopkb_nmq_generate_filename_for_socket(int sockfd, struct socket_i
 	const uint16_t port_1 = _get_port(&socket_info->addr_1);
 	const uint16_t port_2 = _get_port(&socket_info->addr_2);
 
+	int offset = sprintf(buffer, "%s/", loopkb_socket_dir);
+
 	if (socket_info->addr_1.sa_family == AF_INET)
 	{
-		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv4.%d.%s:%d:%s:%d", socket_info->protocol, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
+		snprintf(buffer + offset, len, LOOPKB_FILE_PREFIX "ipv4.%d.%s:%d:%s:%d", socket_info->protocol, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
 	}
 	else if (socket_info->addr_1.sa_family == AF_INET6)
 	{
-		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv6.%d.%s:%d:%s:%d", socket_info->protocol, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
+		snprintf(buffer + offset, len, LOOPKB_FILE_PREFIX "ipv6.%d.%s:%d:%s:%d", socket_info->protocol, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
 	}
 	else
 	{
 		// TODO
-		//snprintf(buffer, len, LOOPKB_FILE_PREFIX "%d.%d.%u:%d:%u:%d", socket_info->addr_1.sin_family, socket_info->protocol, socket_info->ipv4.ip_addr_1, port_1, socket_info->ipv4.ip_addr_2, port_2);
+		//snprintf(buffer + offset, len, LOOPKB_FILE_PREFIX "%d.%d.%u:%d:%u:%d", socket_info->addr_1.sin_family, socket_info->protocol, socket_info->ipv4.ip_addr_1, port_1, socket_info->ipv4.ip_addr_2, port_2);
+		return NULL;
 	}
 
 	__loopkb_log(log_level_debug, "_loopkb_nmq_generate_filename_for_socket: Socket %d will use filename %s", sockfd, buffer);
@@ -508,7 +511,11 @@ int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_in
 	__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Offloaded socket %d uses index %d", sockfd, index);
 
 	char filename[256];
-	_loopkb_nmq_generate_filename_for_socket(sockfd, socket_info, type, filename, MAX_FILENAME_SIZE);
+	if (NULL == _loopkb_nmq_generate_filename_for_socket(sockfd, socket_info, type, filename, MAX_FILENAME_SIZE))
+	{
+		__loopkb_log(log_level_error, "_loopkb_nmq_add_offloaded_socket: Cannot offloaded socket %d, error creating socket file", sockfd);
+		return -1;
+	}
 	assert(socket_file_map[index].context == NULL);
 	assert(socket_file_map[index].type == unknown);
 	socket_file_map[index].context = malloc(sizeof(struct context_t));

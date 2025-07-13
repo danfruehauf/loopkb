@@ -19,11 +19,12 @@
 */
 
 #include <dlfcn.h>
-#include <fcntl.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "log.h"
@@ -33,6 +34,7 @@
 #define VISIBILITY_DEFAULT __attribute__((__visibility__("default")))
 
 char loopkb_log_level[16];
+char loopkb_socket_dir[128];
 size_t loopkb_trace = 0;
 size_t loopkb_ring_size = 15;
 size_t loopkb_packet_size = LOOPKB_PACKET_SIZE_MAX;
@@ -112,6 +114,30 @@ static void _loopkb_init()
 		else
 		{
 			__loopkb_log(log_level_error, "Unsupported LOOPKB_LOG_LEVEL=%s", loopkb_log_level_);
+		}
+	}
+
+	strcpy(loopkb_socket_dir, "");
+	const char* loopkb_socket_dir_ = getenv("LOOPKB_SOCKET_DIR");
+	if (NULL != loopkb_socket_dir_)
+	{
+		struct stat statbuf;
+		if (stat(loopkb_socket_dir_, &statbuf) != 0)
+		{
+			__loopkb_log(log_level_error, "Cannot set LOOPKB_SOCKET_DIR='%s', directory does not exist. Using local directory instead", loopkb_socket_dir_);
+		}
+		else if (!S_ISDIR(statbuf.st_mode))
+		{
+			__loopkb_log(log_level_error, "Cannot set LOOPKB_SOCKET_DIR='%s', path is not a directory. Using local directory instead", loopkb_socket_dir_);
+		}
+		else
+		{
+			strncpy(loopkb_socket_dir, loopkb_socket_dir_, sizeof(loopkb_socket_dir) - 1);
+			if (loopkb_socket_dir[strlen(loopkb_socket_dir) - 1] == '/')
+			{
+				loopkb_socket_dir[strlen(loopkb_socket_dir) - 1] = '\0';
+			}
+			__loopkb_log(log_level_info, "Setting LOOPKB_SOCKET_DIR='%s'", loopkb_socket_dir);
 		}
 	}
 
