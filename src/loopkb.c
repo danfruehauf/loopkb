@@ -334,8 +334,30 @@ ssize_t _loopkb_sendto(int sockfd, const void* buf, size_t len, int flags, const
 	return _sys_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 }
 
-ssize_t _loopkb_sendmsg(int sockfd, const struct msghdr *msg, int flags)
+ssize_t _loopkb_sendmsg(int sockfd, const struct msghdr* msg, int flags)
 {
+	if (msg == NULL || msg->msg_iovlen <= 0)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+
+	if (msg->msg_iovlen != 1)
+	{
+		errno = ENOTSUP;
+		return -1;
+	}
+
+	const void* buf = msg->msg_iov[0].iov_base;
+	const size_t len = msg->msg_iov[0].iov_len;
+	const struct sockaddr* dest = (const struct sockaddr*) msg->msg_name;
+	socklen_t addrlen = msg->msg_namelen;
+
+	const ssize_t offload_send_retval = _loopkb_nmq_send(sockfd, buf, len, flags, dest, addrlen);
+	if (offload_send_retval >= 0)
+	{
+		return offload_send_retval;
+	}
 	return _sys_sendmsg(sockfd, msg, flags);
 }
 
@@ -371,8 +393,29 @@ ssize_t _loopkb_recvfrom(int sockfd, void* buf, size_t len, int flags, struct so
 	return _sys_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
 }
 
-ssize_t _loopkb_recvmsg(int sockfd, struct msghdr *msg, int flags)
+ssize_t _loopkb_recvmsg(int sockfd, struct msghdr* msg, int flags)
 {
+	if (msg == NULL || msg->msg_iovlen <= 0)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+
+	if (msg->msg_iovlen != 1)
+	{
+		errno = ENOTSUP;
+		return -1;
+	}
+
+	void* buf = msg->msg_iov[0].iov_base;
+	const size_t len = msg->msg_iov[0].iov_len;
+	socklen_t* addrlen = msg->msg_namelen > 0 ? &msg->msg_namelen : NULL;
+
+	const ssize_t offload_recv_retval = _loopkb_nmq_receive(sockfd, buf, len, flags, (struct sockaddr*) msg->msg_name, addrlen);
+	if (offload_recv_retval >= 0)
+	{
+		return offload_recv_retval;
+	}
 	return _sys_recvmsg(sockfd, msg, flags);
 }
 
@@ -481,7 +524,7 @@ ssize_t sendto(int sockfd, const void* buf, size_t len, int flags, const struct 
 }
 
 VISIBILITY_DEFAULT
-ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
+ssize_t sendmsg(int sockfd, const struct msghdr* msg, int flags)
 {
 	return _loopkb_sendmsg(sockfd, msg, flags);
 }

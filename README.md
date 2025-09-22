@@ -85,7 +85,8 @@ Lots, to begin with. But here is a partial list:
  * Implement more system calls, notably:
    * ~~poll()~~
    * epoll()
-   * recvmsg()/recvmmsg()
+   * ~~recvmsg()/recvmmsg()~~
+   * ~~sendmsg()/sendmmsg()~~
    * ~~fcntl() (With `F_SETFL/SOCK_NONBLOCK`)~~
  * ~~Allow non-bound UDP sockets (sendto(), recvfrom())~~
    * ~~Allow "connected" UDP sockets~~

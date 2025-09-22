@@ -43,13 +43,13 @@ typedef int (*ppoll_function_t)(struct pollfd* fds, nfds_t nfds, const struct ti
 // send*
 typedef ssize_t (*send_function_t)(int sockfd, const void* buf, size_t len, int flags);
 typedef ssize_t (*sendto_function_t)(int sockfd, const void* buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen);
-typedef ssize_t (*sendmsg_function_t)(int sockfd, const struct msghdr *msg, int flags);
+typedef ssize_t (*sendmsg_function_t)(int sockfd, const struct msghdr* msg, int flags);
 typedef ssize_t (*write_function_t)(int fd, const void* buf, size_t count);
 
 // recv*
 typedef ssize_t (*recv_function_t)(int sockfd, void* buf, size_t len, int flags);
 typedef ssize_t (*recvfrom_function_t)(int sockfd, void* buf, size_t len, int flags, struct sockaddr *restrict src_addr, socklen_t* restrict addrlen);
-typedef ssize_t (*recvmsg_function_t)(int sockfd, struct msghdr *msg, int flags);
+typedef ssize_t (*recvmsg_function_t)(int sockfd, struct msghdr* msg, int flags);
 typedef ssize_t (*read_function_t)(int fd, void* buf, size_t count);
 
 // misc
@@ -70,12 +70,12 @@ int _loopkb_ppoll(struct pollfd* fds, nfds_t nfds, const struct timespec* tmo_p,
 
 ssize_t _loopkb_send(int sockfd, const void* buf, size_t len, int flags);
 ssize_t _loopkb_sendto(int sockfd, const void* buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen);
-ssize_t _loopkb_sendmsg(int sockfd, const struct msghdr *msg, int flags);
+ssize_t _loopkb_sendmsg(int sockfd, const struct msghdr* msg, int flags);
 ssize_t _loopkb_write(int fd, const void* buf, size_t count);
 
 ssize_t _loopkb_recv(int sockfd, void* buf, size_t len, int flags);
 ssize_t _loopkb_recvfrom(int sockfd, void* buf, size_t len, int flags, struct sockaddr *restrict src_addr, socklen_t* restrict addrlen);
-ssize_t _loopkb_recvmsg(int sockfd, struct msghdr *msg, int flags);
+ssize_t _loopkb_recvmsg(int sockfd, struct msghdr* msg, int flags);
 ssize_t _loopkb_read(int fd, void* buf, size_t count);
 
 int _loopkb_fcntl(int fd, int op, int arg);
