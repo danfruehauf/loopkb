@@ -35,7 +35,6 @@
 
 char loopkb_log_level[16];
 char loopkb_socket_dir[128];
-size_t loopkb_trace = 0;
 size_t loopkb_ring_size = 15;
 size_t loopkb_packet_size = LOOPKB_PACKET_SIZE_MAX;
 size_t loopkb_offloaded_packet_size = LOOPKB_PACKET_SIZE_MAX;
@@ -205,10 +204,10 @@ int _loopkb_banner(FILE* fp)
 	retval += fprintf(fp, "========== LoopKB ==========\n");
 	retval += fprintf(fp, "============================\n");
 	retval += fprintf(fp, "%-*s = %-*s\n", column_width, "LOOPKB_LOG_LEVEL", column_width, loopkb_log_level);
-	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_TRACE", column_width, loopkb_trace);
 	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_RING_SIZE", column_width, loopkb_ring_size);
 	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_PACKET_SIZE", column_width, loopkb_packet_size);
 	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_MAX_SOCKETS", column_width, loopkb_max_sockets);
+	retval += fprintf(fp, "%-*s = %-*s\n", column_width, "LOOPKB_SOCKET_DIR", column_width, loopkb_socket_dir);
 	retval += fprintf(fp, "============================\n");
 	return retval;
 }
