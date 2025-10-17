@@ -27,7 +27,7 @@ extern int loopkb_log_level_stdout;
 extern int loopkb_log_level_stderr;
 extern const char* log_level_strings[];
 
-enum log_level_t : uint8_t
+enum log_level_t
 {
 	log_level_trace,
 	log_level_debug,

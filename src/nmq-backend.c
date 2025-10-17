@@ -48,7 +48,7 @@
 
 static const char eof[1] = { '\0' };
 
-enum channel_type_t : uint8_t
+enum channel_type_t
 {
 	server_to_client_data = 0,
 	client_to_server_data = 1,
@@ -59,7 +59,7 @@ enum channel_type_t : uint8_t
 	total_channels_tcp = 4,
 };
 
-enum socket_type_t : uint8_t
+enum socket_type_t
 {
 	tcp_server = 0,
 	tcp_client = 1,

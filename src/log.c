@@ -50,12 +50,12 @@ int __loopkb_log_args(enum log_level_t log_level, const char* format, va_list ar
 	static __thread char lineBuffer[MAX_LINE_LENGTH];
 	FILE* stream = NULL;
 
-	if (log_level >= loopkb_log_level_stdout)
+	if ((int) log_level >= (int) loopkb_log_level_stdout)
 	{
 		stream = stdout;
 	}
 
-	if (log_level >= loopkb_log_level_stderr)
+	if ((int) log_level >= (int) loopkb_log_level_stderr)
 	{
 		stream = stderr;
 	}
