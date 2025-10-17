@@ -1366,7 +1366,7 @@ int _loopkb_nmq_ppoll(struct pollfd* fds, nfds_t nfds, const struct timespec* tm
 				fds[i].events & POLLOUT ||
 				fds[i].events & POLLERR)
 		{
-			if (_loopkb_nmq_is_offloaded_socket(i))
+			if (_loopkb_nmq_is_offloaded_socket(fds[i].fd))
 			{
 				++offloaded_sockets;
 			}
@@ -1422,15 +1422,16 @@ int _loopkb_nmq_ppoll(struct pollfd* fds, nfds_t nfds, const struct timespec* tm
 
 		for (size_t i = 0; i < nfds; ++i)
 		{
-			if (_loopkb_nmq_is_offloaded_socket(i))
+			int socket = fds[i].fd;
+			if (_loopkb_nmq_is_offloaded_socket(socket))
 			{
-				if (fds[i].events & POLLIN && _loopkb_nmq_can_receive(i))
+				if (fds[i].events & POLLIN && _loopkb_nmq_can_receive(socket))
 				{
 					fds[i].revents |= POLLIN;
 					has_data = true;
 				}
 
-				if (fds[i].events & POLLOUT && _loopkb_nmq_can_send(i))
+				if (fds[i].events & POLLOUT && _loopkb_nmq_can_send(socket))
 				{
 					fds[i].revents |= POLLOUT;
 					has_data = true;

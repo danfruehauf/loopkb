@@ -190,7 +190,7 @@ static void _loopkb_init()
 #ifdef _GNU_SOURCE
 	OVERRIDE_FUNCTION(accept4_function_t, accept4, _sys_accept4);
 	OVERRIDE_FUNCTION(pselect_function_t, pselect, _sys_pselect);
-	OVERRIDE_FUNCTION(ppoll_function_t, poll, _sys_ppoll);
+	OVERRIDE_FUNCTION(ppoll_function_t, ppoll, _sys_ppoll);
 #endif
 
 #pragma GCC diagnostic pop
