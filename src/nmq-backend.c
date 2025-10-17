@@ -1031,7 +1031,7 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 				if (non_blocking)
 				{
 					errno = EAGAIN;
-					return 0;
+					return LOOPKB_OFFLOADED_SOCKET_HAD_ERRORS;
 				}
 			}
 
@@ -1094,7 +1094,7 @@ ssize_t _loopkb_nmq_send_offload_stream(int index, int sockfd, const void* buf, 
 		}
 
 		errno = EAGAIN;
-		return 0;
+		return LOOPKB_OFFLOADED_SOCKET_HAD_ERRORS;
 	}
 	else
 	{
@@ -1135,7 +1135,7 @@ ssize_t _loopkb_nmq_send_offload_dgram(int index, int sockfd, const void* buf, s
 		}
 
 		errno = EAGAIN;
-		return 0;
+		return LOOPKB_OFFLOADED_SOCKET_HAD_ERRORS;
 	}
 	else
 	{

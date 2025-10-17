@@ -28,6 +28,8 @@
 
 #define LOOPKB_PACKET_SIZE_MAX 1500U
 
+#define LOOPKB_OFFLOADED_SOCKET_HAD_ERRORS -2
+
 // Basic function
 typedef int (*socket_function_t)(int domain, int type, int protocol);
 typedef int (*bind_function_t)(int sockfd, const struct sockaddr *addr, socklen_t addrlen);

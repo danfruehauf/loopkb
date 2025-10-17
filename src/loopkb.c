@@ -320,6 +320,11 @@ ssize_t _loopkb_send(int sockfd, const void* buf, size_t len, int flags)
 	{
 		return offload_send_retval;
 	}
+	else if (offload_send_retval == LOOPKB_OFFLOADED_SOCKET_HAD_ERRORS)
+	{
+		return -1;
+	}
+
 	return _sys_send(sockfd, buf, len, flags);
 }
 
@@ -330,6 +335,11 @@ ssize_t _loopkb_sendto(int sockfd, const void* buf, size_t len, int flags, const
 	{
 		return offload_send_retval;
 	}
+	else if (offload_send_retval == LOOPKB_OFFLOADED_SOCKET_HAD_ERRORS)
+	{
+		return -1;
+	}
+
 	return _sys_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 }
 
@@ -357,6 +367,11 @@ ssize_t _loopkb_sendmsg(int sockfd, const struct msghdr* msg, int flags)
 	{
 		return offload_send_retval;
 	}
+	else if (offload_send_retval == LOOPKB_OFFLOADED_SOCKET_HAD_ERRORS)
+	{
+		return -1;
+	}
+
 	return _sys_sendmsg(sockfd, msg, flags);
 }
 
@@ -378,6 +393,10 @@ ssize_t _loopkb_recv(int sockfd, void* buf, size_t len, int flags)
 	{
 		return offload_recv_retval;
 	}
+	else if (offload_recv_retval == LOOPKB_OFFLOADED_SOCKET_HAD_ERRORS)
+	{
+		return -1;
+	}
 
 	return _sys_recv(sockfd, buf, len, flags);
 }
@@ -389,6 +408,11 @@ ssize_t _loopkb_recvfrom(int sockfd, void* buf, size_t len, int flags, struct so
 	{
 		return offload_recv_retval;
 	}
+	else if (offload_recv_retval == LOOPKB_OFFLOADED_SOCKET_HAD_ERRORS)
+	{
+		return -1;
+	}
+
 	return _sys_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
 }
 
@@ -415,6 +439,11 @@ ssize_t _loopkb_recvmsg(int sockfd, struct msghdr* msg, int flags)
 	{
 		return offload_recv_retval;
 	}
+	else if (offload_recv_retval == LOOPKB_OFFLOADED_SOCKET_HAD_ERRORS)
+	{
+		return -1;
+	}
+
 	return _sys_recvmsg(sockfd, msg, flags);
 }
 
