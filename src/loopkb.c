@@ -244,7 +244,7 @@ int _loopkb_socket(int domain, int type, int protocol)
 	return sockfd;
 }
 
-int _loopkb_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+int _loopkb_bind(int sockfd, const struct sockaddr* addr, socklen_t addrlen)
 {
 	__loopkb_log(log_level_trace, "_loopkb_bind %d", sockfd);
 
@@ -256,13 +256,13 @@ int _loopkb_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 	return retval;
 }
 
-int _loopkb_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+int _loopkb_connect(int sockfd, const struct sockaddr* addr, socklen_t addrlen)
 {
 	__loopkb_log(log_level_trace, "_loopkb_connect");
 	return _loopkb_nmq_connect(sockfd, addr, addrlen);
 }
 
-int _loopkb_accept(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrlen, int flags)
+int _loopkb_accept(int sockfd, struct sockaddr* restrict addr, socklen_t* restrict addrlen, int flags)
 {
 	__loopkb_log(log_level_trace, "_loopkb_accept %d", sockfd);
 
@@ -298,7 +298,7 @@ int _loopkb_close(int fd)
 	return retval;
 }
 
-int _loopkb_select(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, struct timeval *restrict timeout)
+int _loopkb_select(int nfds, fd_set* restrict readfds, fd_set* restrict writefds, fd_set* restrict exceptfds, struct timeval* restrict timeout)
 {
 	if (timeout != NULL)
 	{
@@ -314,12 +314,12 @@ int _loopkb_select(int nfds, fd_set *restrict readfds, fd_set *restrict writefds
 	}
 }
 
-int _loopkb_pselect(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, const struct timespec *restrict timeout, const sigset_t* restrict sigmask)
+int _loopkb_pselect(int nfds, fd_set* restrict readfds, fd_set* restrict writefds, fd_set* restrict exceptfds, const struct timespec* restrict timeout, const sigset_t* restrict sigmask)
 {
 	return _loopkb_nmq_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
 }
 
-int _loopkb_poll(struct pollfd *fds, nfds_t nfds, int timeout)
+int _loopkb_poll(struct pollfd* fds, nfds_t nfds, int timeout)
 {
 	struct timespec ts;
 	// Convert timeout milliseconds to timespec (ns)
@@ -348,7 +348,7 @@ ssize_t _loopkb_send(int sockfd, const void* buf, size_t len, int flags)
 	return _sys_send(sockfd, buf, len, flags);
 }
 
-ssize_t _loopkb_sendto(int sockfd, const void* buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen)
+ssize_t _loopkb_sendto(int sockfd, const void* buf, size_t len, int flags, const struct sockaddr* dest_addr, socklen_t addrlen)
 {
 	const ssize_t offload_send_retval = _loopkb_nmq_send(sockfd, buf, len, flags, dest_addr, addrlen);
 	if (offload_send_retval >= 0)
@@ -421,7 +421,7 @@ ssize_t _loopkb_recv(int sockfd, void* buf, size_t len, int flags)
 	return _sys_recv(sockfd, buf, len, flags);
 }
 
-ssize_t _loopkb_recvfrom(int sockfd, void* buf, size_t len, int flags, struct sockaddr *restrict src_addr, socklen_t* restrict addrlen)
+ssize_t _loopkb_recvfrom(int sockfd, void* buf, size_t len, int flags, struct sockaddr* restrict src_addr, socklen_t* restrict addrlen)
 {
 	const ssize_t offload_recv_retval = _loopkb_nmq_receive(sockfd, buf, len, flags, src_addr, addrlen);
 	if (offload_recv_retval >= 0)
@@ -505,26 +505,26 @@ int socket(int domain, int type, int protocol)
 }
 
 VISIBILITY_DEFAULT
-int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+int bind(int sockfd, const struct sockaddr* addr, socklen_t addrlen)
 {
 	return _loopkb_bind(sockfd, addr, addrlen);
 }
 
 VISIBILITY_DEFAULT
-int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+int connect(int sockfd, const struct sockaddr* addr, socklen_t addrlen)
 {
 	return _loopkb_connect(sockfd, addr, addrlen);
 }
 
 VISIBILITY_DEFAULT
-int accept(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrlen)
+int accept(int sockfd, struct sockaddr* restrict addr, socklen_t* restrict addrlen)
 {
 	const int flags = 0;
 	return _loopkb_accept(sockfd, addr, addrlen, flags);
 }
 
 VISIBILITY_DEFAULT
-int accept4(int sockfd, struct sockaddr *restrict addr, socklen_t* restrict addrlen, int flags)
+int accept4(int sockfd, struct sockaddr* restrict addr, socklen_t* restrict addrlen, int flags)
 {
 	return _loopkb_accept(sockfd, addr, addrlen, flags);
 }
@@ -536,25 +536,25 @@ int close(int fd)
 }
 
 VISIBILITY_DEFAULT
-int select(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, struct timeval *restrict timeout)
+int select(int nfds, fd_set* restrict readfds, fd_set* restrict writefds, fd_set* restrict exceptfds, struct timeval* restrict timeout)
 {
 	return _loopkb_select(nfds, readfds, writefds, exceptfds, timeout);
 }
 
 VISIBILITY_DEFAULT
-int pselect(int nfds, fd_set *restrict readfds, fd_set *restrict writefds, fd_set *restrict exceptfds, const struct timespec *restrict timeout, const sigset_t* restrict sigmask)
+int pselect(int nfds, fd_set* restrict readfds, fd_set* restrict writefds, fd_set* restrict exceptfds, const struct timespec* restrict timeout, const sigset_t* restrict sigmask)
 {
 	return _loopkb_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
 }
 
 VISIBILITY_DEFAULT
-int poll(struct pollfd *fds, nfds_t nfds, int timeout)
+int poll(struct pollfd* fds, nfds_t nfds, int timeout)
 {
 	return _loopkb_poll(fds, nfds, timeout);
 }
 
 VISIBILITY_DEFAULT
-int ppoll(struct pollfd *fds, nfds_t nfds, const struct timespec *tmo_p, const sigset_t* sigmask)
+int ppoll(struct pollfd* fds, nfds_t nfds, const struct timespec* tmo_p, const sigset_t* sigmask)
 {
 	return _loopkb_ppoll(fds, nfds, tmo_p, sigmask);
 }
@@ -566,7 +566,7 @@ ssize_t send(int sockfd, const void* buf, size_t len, int flags)
 }
 
 VISIBILITY_DEFAULT
-ssize_t sendto(int sockfd, const void* buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen)
+ssize_t sendto(int sockfd, const void* buf, size_t len, int flags, const struct sockaddr* dest_addr, socklen_t addrlen)
 {
 	return _loopkb_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 }
@@ -590,13 +590,13 @@ ssize_t recv(int sockfd, void* buf, size_t len, int flags)
 }
 
 VISIBILITY_DEFAULT
-ssize_t recvfrom(int sockfd, void* buf, size_t len, int flags, struct sockaddr *restrict src_addr, socklen_t* restrict addrlen)
+ssize_t recvfrom(int sockfd, void* buf, size_t len, int flags, struct sockaddr* restrict src_addr, socklen_t* restrict addrlen)
 {
 	return _loopkb_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
 }
 
 VISIBILITY_DEFAULT
-ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
+ssize_t recvmsg(int sockfd, struct msghdr* msg, int flags)
 {
 	return _loopkb_recvmsg(sockfd, msg, flags);
 }
