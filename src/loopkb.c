@@ -61,6 +61,22 @@ read_function_t _sys_read = NULL;
 fcntl_function_t _sys_fcntl = NULL;
 fcntl64_function_t _sys_fcntl64 = NULL;
 
+#ifndef RTLD_NEXT
+#define OVERRIDE_FUNCTION(function_type, function_name, function_variable) \
+	if (__libc_handle == NULL) \
+	{ \
+		__libc_handle = dlopen("libc.so.6", RTLD_NOW | RTLD_LOCAL); \
+	} \
+	if (__libc_handle == NULL) \
+	{ \
+		__libc_handle = dlopen("libc.so", RTLD_NOW | RTLD_LOCAL); \
+	} \
+	if (__libc_handle != NULL) \
+	{ \
+		(function_variable) = (function_type) dlsym(__libc_handle, #function_name); \
+	} \
+
+#else
 // Need to disable -Wpedantic for that macro, otherwise you can use:
 // *(void **) (&function_variable) = dlsym(RTLD_NEXT, #function_name);
 #define OVERRIDE_FUNCTION(function_type, function_name, function_variable) \
@@ -68,6 +84,8 @@ fcntl64_function_t _sys_fcntl64 = NULL;
 	{ \
 		function_variable = (function_type) dlsym(RTLD_NEXT, #function_name); \
 	} \
+
+#endif
 
 __attribute__((constructor))
 static void _loopkb_init()
@@ -168,6 +186,8 @@ static void _loopkb_init()
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
+	static void* __libc_handle = NULL;
+	(void) __libc_handle;
 	OVERRIDE_FUNCTION(socket_function_t, socket, _sys_socket);
 	OVERRIDE_FUNCTION(bind_function_t, bind, _sys_bind);
 	OVERRIDE_FUNCTION(connect_function_t, connect, _sys_connect);
