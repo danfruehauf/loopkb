@@ -94,6 +94,7 @@ Lots, to begin with. But here is a partial list:
    * ~~Directory to keep ring buffers files in~~
    * Sockets/endpoints to offload
  * Better cleanup of artifact files
+ * Multi-threading support
 
 # License
 Free use of this software is granted under the terms of the GNU General Public License (GPL). For details see the file LICENSE included with the loopkb distribution.
