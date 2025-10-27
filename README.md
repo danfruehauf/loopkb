@@ -26,8 +26,15 @@ $ LD_PRELOAD=build/libloopkb.so sockperf server --addr 127.0.0.1 --tcp
 
 Client:
 ```
-$ LD_PRELOAD=build/libloopkb.so sockperf ping-pong --addr 127.0.0.1 --client_addr 127.0.0.1 --tcp --burst 2
+$ LD_PRELOAD=build/libloopkb.so sockperf ping-pong --addr 127.0.0.1 --client_addr 127.0.0.1 --tcp --mps 5000000
 ```
+
+`--mps` must be passed, failure to do so can result in:
+```
+sockperf: ERROR: _seqN > m_maxSequenceNo (errno=2 No such file or directory)
+```
+
+This is due to libloopkb potentially breaking the maximum default packet rate sockperf is expected to have (600K/s).
 
 ### nc
 Server:
