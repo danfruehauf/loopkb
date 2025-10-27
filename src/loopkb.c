@@ -18,6 +18,10 @@
     along with loopkb.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#  define _GNU_SOURCE
+#endif
+
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -60,6 +64,7 @@ recvmsg_function_t _sys_recvmsg = NULL;
 read_function_t _sys_read = NULL;
 fcntl_function_t _sys_fcntl = NULL;
 fcntl64_function_t _sys_fcntl64 = NULL;
+sigaction_function_t _sys_sigaction = NULL;
 
 #ifndef RTLD_NEXT
 #define OVERRIDE_FUNCTION(function_type, function_name, function_variable) \
@@ -86,6 +91,41 @@ fcntl64_function_t _sys_fcntl64 = NULL;
 	} \
 
 #endif
+
+int _loopkb_interruped = 0;
+
+// Interrupting signals to override
+static const int interrupting_signals[] = { SIGINT, SIGTERM, SIGHUP, SIGQUIT, SIGUSR1, SIGUSR2, SIGALRM, SIGPIPE, SIGCHLD };
+static struct sigaction _loopkb_saved_signal_handlers[NSIG];
+
+static int _loopkb_is_interrupting_signal(int sig)
+{
+	for (size_t i = 0; i < sizeof(interrupting_signals) / sizeof(interrupting_signals[0]); i++)
+	{
+		if (interrupting_signals[i] == sig)
+		{
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+// Our chaining wrapper that will be installed in place of the app's handler
+static void _loopkb_signal_handler_wrapper(int signo)
+{
+	_loopkb_interruped = 1;
+	__loopkb_log(log_level_trace, "_loopkb_signal_handler_wrapper: Interrupted");
+
+	struct sigaction* orig = &_loopkb_saved_signal_handlers[signo];
+	if (orig->sa_handler == SIG_IGN || orig->sa_handler == SIG_DFL || orig->sa_handler == _loopkb_signal_handler_wrapper)
+	{
+		return;
+	}
+
+	// Call the original handler
+	orig->sa_handler(signo);
+}
 
 __attribute__((constructor))
 static void _loopkb_init()
@@ -205,6 +245,7 @@ static void _loopkb_init()
 	OVERRIDE_FUNCTION(read_function_t, read, _sys_read);
 	OVERRIDE_FUNCTION(fcntl_function_t, fcntl, _sys_fcntl);
 	OVERRIDE_FUNCTION(fcntl64_function_t, fcntl64, _sys_fcntl64);
+	OVERRIDE_FUNCTION(sigaction_function_t, sigaction, _sys_sigaction);
 
 #ifdef _GNU_SOURCE
 	OVERRIDE_FUNCTION(accept4_function_t, accept4, _sys_accept4);
@@ -498,12 +539,48 @@ int _loopkb_fcntl64(int fd, int op, int arg)
 	return _sys_fcntl64(fd, op, arg);
 }
 
+int _loopkb_sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
+{
+	if (oldact != NULL)
+	{
+		memset(oldact, 0, sizeof(*oldact));
+	}
+
+	// Handler not installed - just a query
+	if (act == NULL)
+	{
+		return _sys_sigaction(signum, NULL, oldact);
+	}
+
+	// Not ignored - but is interrupting
+	if (_loopkb_is_interrupting_signal(signum) && act->sa_handler != SIG_IGN)
+	{
+		memcpy(&_loopkb_saved_signal_handlers[signum], act, sizeof(struct sigaction));
+
+		struct sigaction wrap = *act;
+		wrap.sa_handler = _loopkb_signal_handler_wrapper;
+		wrap.sa_flags &= ~SA_RESTART;
+
+		int ret = _sys_sigaction(signum, &wrap, oldact);
+		if (ret == 0)
+		{
+			__loopkb_log(log_level_trace, "_loopkb_sigaction: Chained signal handler for %d (%s)\n", signum, strsignal(signum));
+		}
+		return ret;
+	}
+
+	// Pass through unchanged
+	return _sys_sigaction(signum, act, oldact);
+}
+
 VISIBILITY_DEFAULT
 int socket(int domain, int type, int protocol)
 {
 	return _loopkb_socket(domain, type, protocol);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 VISIBILITY_DEFAULT
 int bind(int sockfd, const struct sockaddr* addr, socklen_t addrlen)
 {
@@ -528,6 +605,7 @@ int accept4(int sockfd, struct sockaddr* restrict addr, socklen_t* restrict addr
 {
 	return _loopkb_accept(sockfd, addr, addrlen, flags);
 }
+#pragma GCC diagnostic pop
 
 VISIBILITY_DEFAULT
 int close(int fd)
@@ -565,11 +643,14 @@ ssize_t send(int sockfd, const void* buf, size_t len, int flags)
 	return _loopkb_send(sockfd, buf, len, flags);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 VISIBILITY_DEFAULT
 ssize_t sendto(int sockfd, const void* buf, size_t len, int flags, const struct sockaddr* dest_addr, socklen_t addrlen)
 {
 	return _loopkb_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 }
+#pragma GCC diagnostic pop
 
 VISIBILITY_DEFAULT
 ssize_t sendmsg(int sockfd, const struct msghdr* msg, int flags)
@@ -589,11 +670,14 @@ ssize_t recv(int sockfd, void* buf, size_t len, int flags)
 	return _loopkb_recv(sockfd, buf, len, flags);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 VISIBILITY_DEFAULT
 ssize_t recvfrom(int sockfd, void* buf, size_t len, int flags, struct sockaddr* restrict src_addr, socklen_t* restrict addrlen)
 {
 	return _loopkb_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
 }
+#pragma GCC diagnostic pop
 
 VISIBILITY_DEFAULT
 ssize_t recvmsg(int sockfd, struct msghdr* msg, int flags)
@@ -627,4 +711,10 @@ int fcntl64(int fd, int op, ...)
 	va_end(va);
 
 	return _loopkb_fcntl(fd, op, arg);
+}
+
+VISIBILITY_DEFAULT
+int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
+{
+	return _loopkb_sigaction(signum, act, oldact);
 }

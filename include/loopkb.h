@@ -21,6 +21,7 @@
 #pragma once
 
 #include <poll.h>
+#include <signal.h>
 #include <stdio.h>
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -57,6 +58,7 @@ typedef ssize_t (*read_function_t)(int fd, void* buf, size_t count);
 // misc
 typedef int (*fcntl_function_t)(int fd, int op, ...);
 typedef int (*fcntl64_function_t)(int fd, int op, ...);
+typedef int (*sigaction_function_t)(int signum, const struct sigaction* act, struct sigaction* oldact);
 
 int _loopkb_banner(FILE* fp);
 
@@ -82,6 +84,9 @@ ssize_t _loopkb_read(int fd, void* buf, size_t count);
 
 int _loopkb_fcntl(int fd, int op, int arg);
 int _loopkb_fcntl64(int fd, int op, int arg);
+
+// Signals that we must not block any more
+extern int _loopkb_interruped;
 
 // Configuration variables
 extern char loopkb_log_level[16];
@@ -111,3 +116,4 @@ extern recvmsg_function_t _sys_recvmsg;
 extern read_function_t _sys_read;
 extern fcntl_function_t _sys_fcntl;
 extern fcntl64_function_t _sys_fcntl64;
+extern sigaction_function_t _sys_sigaction;

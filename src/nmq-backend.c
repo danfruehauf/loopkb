@@ -1028,6 +1028,12 @@ ssize_t _loopkb_nmq_receive(int sockfd, void* buf, size_t len, int flags, struct
 			}
 			else
 			{
+				if (_loopkb_interruped != 0)
+				{
+					errno = EINTR;
+					return LOOPKB_OFFLOADED_SOCKET_HAD_ERRORS;
+				}
+
 				if (non_blocking)
 				{
 					errno = EAGAIN;
@@ -1050,12 +1056,6 @@ ssize_t _loopkb_nmq_send(int sockfd, const void* buf, size_t len, int flags, con
 	if (index >= 0)
 	{
 		flags = socket_file_map[index].flags | flags;
-
-		// TODO Avoid the memcpy
-		const struct offloaded_socket_t* offloaded_socket = &socket_file_map[index];
-		struct offloaded_packet_t offloaded_packet;
-		memcpy(&offloaded_packet, &offloaded_socket->addr6, sizeof(offloaded_socket->addr6));
-		memcpy(&offloaded_packet.data, buf, len);
 
 		if (socket_file_map[index].type == tcp_server || socket_file_map[index].type == tcp_client)
 		{
@@ -1098,8 +1098,15 @@ ssize_t _loopkb_nmq_send_offload_stream(int index, int sockfd, const void* buf, 
 	}
 	else
 	{
-		// Blocking
-		context_send(socket_file_map[index].context, ring_from, ring_to, &offloaded_packet, packet_len);
+		while (!context_sendnb(socket_file_map[index].context, ring_from, ring_to, &offloaded_packet, packet_len))
+		{
+			if (_loopkb_interruped != 0)
+			{
+				errno = EINTR;
+				return LOOPKB_OFFLOADED_SOCKET_HAD_ERRORS;
+			}
+		}
+
 		return len > loopkb_packet_size ? loopkb_packet_size : len;
 	}
 }
@@ -1140,7 +1147,15 @@ ssize_t _loopkb_nmq_send_offload_dgram(int index, int sockfd, const void* buf, s
 	else
 	{
 		// Blocking
-		context_send(context, ring_from, ring_to, &offloaded_packet, packet_len);
+		while (!context_sendnb(context, ring_from, ring_to, &offloaded_packet, packet_len))
+		{
+			if (_loopkb_interruped != 0)
+			{
+				errno = EINTR;
+				return LOOPKB_OFFLOADED_SOCKET_HAD_ERRORS;
+			}
+		}
+
 		return len > loopkb_packet_size ? loopkb_packet_size : len;
 	}
 }
@@ -1309,7 +1324,7 @@ int _loopkb_nmq_pselect(int nfds, fd_set *restrict readfds, fd_set *restrict wri
 
 		now_ns = system_clock_ns();
 	}
-	while (timeout_ns <= 0 || now_ns <= finish_ns);
+	while ((timeout_ns <= 0 || now_ns <= finish_ns) && _loopkb_interruped == 0);
 
 	if (NULL != readfds)
 	{
@@ -1448,7 +1463,7 @@ int _loopkb_nmq_ppoll(struct pollfd* fds, nfds_t nfds, const struct timespec* tm
 
 		now_ns = system_clock_ns();
 	}
-	while (timeout_ns <= 0 || now_ns <= finish_ns);
+	while ((timeout_ns <= 0 || now_ns <= finish_ns) && _loopkb_interruped == 0);
 
 	int retval = 0;
 	for (size_t i = 0; i < nfds; ++i)

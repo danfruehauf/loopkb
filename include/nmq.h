@@ -211,13 +211,6 @@ bool context_send_ring(struct context_t* context_, struct ring *ring, const void
 	return true;
 }
 
-bool context_send(struct context_t* context_, unsigned int from, unsigned int to, const void* msg, size_t size)
-{
-	struct ring *ring = context_get_ring(context_, from, to);
-	while (!context_send_ring(context_, ring, msg, size)) __relax();
-	return true;
-}
-
 bool context_sendnb(struct context_t* context_, unsigned int from, unsigned int to, const void* msg, size_t size)
 {
 	struct ring *ring = context_get_ring(context_, from, to);
@@ -255,13 +248,6 @@ bool context_recv_ring(struct context_t* context_, struct ring *ring, void* msg,
 	__comp();
 
 	ring->_head = (h + 1) & context_->ring_->_size;
-	return true;
-}
-
-bool context_recv(struct context_t* context_, unsigned int from, unsigned int to, void* msg, size_t* size, bool peek)
-{
-	struct ring *ring = context_get_ring(context_, to, from);
-	while (!context_recv_ring(context_, ring, msg, size, peek)) __relax();
 	return true;
 }
 
