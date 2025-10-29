@@ -392,18 +392,21 @@ void _loopkb_nmq_socket_info_debug(const struct socket_info_t* socket_info)
 
 	const uint16_t port_1 = _get_port(&socket_info->addr_1);
 	const uint16_t port_2 = _get_port(&socket_info->addr_2);
+
+	const char* protocol_str = socket_info->protocol == SOCK_STREAM ? "tcp" : socket_info->protocol == SOCK_DGRAM ? "udp" : "unknown";
+
 	if (socket_info->addr_1.sa_family == AF_INET)
 	{
-		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv4.%d.%s:%d:%s:%d", socket_info->protocol, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
+		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv4.%s.%s:%d:%s:%d", protocol_str, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
 	}
 	else if (socket_info->addr_1.sa_family == AF_INET6)
 	{
-		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv6.%d.%s:%d:%s:%d", socket_info->protocol, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
+		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv6.%s.%s:%d:%s:%d", protocol_str, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
 	}
 	else
 	{
 		// TODO
-		//snprintf(buffer, len, LOOPKB_FILE_PREFIX "%d.%d.%u:%d:%u:%d", socket_info->addr_1.sin_family, socket_info->protocol, socket_info->ipv4.ip_addr_1, port_1, socket_info->ipv4.ip_addr_2, port_2);
+		//snprintf(buffer, len, LOOPKB_FILE_PREFIX "%d.%s.%u:%d:%u:%d", socket_info->addr_1.sin_family, protocol_str, socket_info->ipv4.ip_addr_1, port_1, socket_info->ipv4.ip_addr_2, port_2);
 	}
 }
 
@@ -427,18 +430,20 @@ const char* _loopkb_nmq_generate_filename_for_socket(int sockfd, struct socket_i
 		offset = sprintf(buffer, "%s/", loopkb_socket_dir);
 	}
 
+	const char* protocol_str = socket_info->protocol == SOCK_STREAM ? "tcp" : socket_info->protocol == SOCK_DGRAM ? "udp" : "unknown";
+
 	if (socket_info->addr_1.sa_family == AF_INET)
 	{
-		snprintf(buffer + offset, len, LOOPKB_FILE_PREFIX "ipv4.%d.%s:%d:%s:%d", socket_info->protocol, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
+		snprintf(buffer + offset, len, LOOPKB_FILE_PREFIX "ipv4.%s.%s:%d:%s:%d", protocol_str, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
 	}
 	else if (socket_info->addr_1.sa_family == AF_INET6)
 	{
-		snprintf(buffer + offset, len, LOOPKB_FILE_PREFIX "ipv6.%d.%s:%d:%s:%d", socket_info->protocol, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
+		snprintf(buffer + offset, len, LOOPKB_FILE_PREFIX "ipv6.%s.%s:%d:%s:%d", protocol_str, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
 	}
 	else
 	{
 		// TODO
-		//snprintf(buffer + offset, len, LOOPKB_FILE_PREFIX "%d.%d.%u:%d:%u:%d", socket_info->addr_1.sin_family, socket_info->protocol, socket_info->ipv4.ip_addr_1, port_1, socket_info->ipv4.ip_addr_2, port_2);
+		//snprintf(buffer + offset, len, LOOPKB_FILE_PREFIX "%d.%s.%u:%d:%u:%d", socket_info->addr_1.sin_family, protocol_str, socket_info->ipv4.ip_addr_1, port_1, socket_info->ipv4.ip_addr_2, port_2);
 		return NULL;
 	}
 
