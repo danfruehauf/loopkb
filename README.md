@@ -49,64 +49,34 @@ $ LD_PRELOAD=build/libloopkb.so nc --source 127.0.0.1 127.0.0.1 5000
 
 ## Performance
 
-### Intel(R) Core(TM) i7-9700K
- * Without libloopkb: percentile 50.000 = **3.546**
-```
-sockperf: Total 76180 observations; each percentile contains 761.80 observations
-sockperf: ---> <MAX> observation =   39.019
-sockperf: ---> percentile 99.999 =   38.554
-sockperf: ---> percentile 99.990 =   24.600
-sockperf: ---> percentile 99.900 =    5.360
-sockperf: ---> percentile 99.000 =    3.915
-sockperf: ---> percentile 90.000 =    3.718
-sockperf: ---> percentile 75.000 =    3.604
-sockperf: ---> percentile 50.000 =    3.546
-sockperf: ---> percentile 25.000 =    3.508
-sockperf: ---> <MIN> observation =    3.411
-```
- * With libloopkb: percentile 50.000 = **0.176us**
-```
-sockperf: Total 275263 observations; each percentile contains 2752.63 observations
-sockperf: ---> <MAX> observation =   11.715
-sockperf: ---> percentile 99.999 =    2.441
-sockperf: ---> percentile 99.990 =    0.807
-sockperf: ---> percentile 99.900 =    0.202
-sockperf: ---> percentile 99.000 =    0.188
-sockperf: ---> percentile 90.000 =    0.180
-sockperf: ---> percentile 75.000 =    0.178
-sockperf: ---> percentile 50.000 =    0.176
-sockperf: ---> percentile 25.000 =    0.166
-sockperf: ---> <MIN> observation =    0.105
-```
-
 ### AMD Ryzen 7 PRO 8840U
- * Without libloopkb: percentile 50.000 = **8.450us**
+ * Without libloopkb: percentile 50.000 = **6.436**
 ```
-sockperf: Total 46788 observations; each percentile contains 467.88 observations
-sockperf: ---> <MAX> observation =  110.200
-sockperf: ---> percentile 99.999 =  110.200
-sockperf: ---> percentile 99.990 =   85.424
-sockperf: ---> percentile 99.900 =   36.042
-sockperf: ---> percentile 99.000 =   18.399
-sockperf: ---> percentile 90.000 =    9.602
-sockperf: ---> percentile 75.000 =    9.242
-sockperf: ---> percentile 50.000 =    8.450
-sockperf: ---> percentile 25.000 =    7.178
-sockperf: ---> <MIN> observation =    5.289
+sockperf: Total 41210 observations; each percentile contains 412.10 observations
+sockperf: ---> <MAX> observation =  119.949
+sockperf: ---> percentile 99.999 =  119.949
+sockperf: ---> percentile 99.990 =   58.579
+sockperf: ---> percentile 99.900 =   20.027
+sockperf: ---> percentile 99.000 =   11.491
+sockperf: ---> percentile 90.000 =    6.667
+sockperf: ---> percentile 75.000 =    6.537
+sockperf: ---> percentile 50.000 =    6.436
+sockperf: ---> percentile 25.000 =    6.311
+sockperf: ---> <MIN> observation =    5.380
 ```
- * With libloopkb: percentile 50.000 = **0.370us**
+ * With libloopkb: percentile 50.000 = **0.165**
 ```
-sockperf: Total 1084322 observations; each percentile contains 10843.22 observations
-sockperf: ---> <MAX> observation =   19.125
-sockperf: ---> percentile 99.999 =    5.139
-sockperf: ---> percentile 99.990 =    3.516
-sockperf: ---> percentile 99.900 =    1.803
-sockperf: ---> percentile 99.000 =    0.485
-sockperf: ---> percentile 90.000 =    0.410
-sockperf: ---> percentile 75.000 =    0.395
-sockperf: ---> percentile 50.000 =    0.370
-sockperf: ---> percentile 25.000 =    0.305
-sockperf: ---> <MIN> observation =    0.285
+sockperf: Total 275270 observations; each percentile contains 2752.70 observations
+sockperf: ---> <MAX> observation =   56.786
+sockperf: ---> percentile 99.999 =   17.968
+sockperf: ---> percentile 99.990 =    6.296
+sockperf: ---> percentile 99.900 =    1.447
+sockperf: ---> percentile 99.000 =    0.355
+sockperf: ---> percentile 90.000 =    0.180
+sockperf: ---> percentile 75.000 =    0.170
+sockperf: ---> percentile 50.000 =    0.165
+sockperf: ---> percentile 25.000 =    0.155
+sockperf: ---> <MIN> observation =    0.105
 ```
 
 # Environment Variables
