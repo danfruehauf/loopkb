@@ -26,6 +26,9 @@
 #include <signal.h>
 #include <stdint.h>
 #include <sys/socket.h>
+#include <sys/sysinfo.h>
+#include <sys/types.h>
+#include <sys/resource.h>
 #include <unistd.h>
 
 #include "log.h"
@@ -35,6 +38,9 @@
 #include "util.h"
 
 #define LOOPKB_FILE_PREFIX "_loopkb_"
+
+// Define the following to have direct indexing such as socket_file_map[fd]
+#define LOOPKB_DIRECT_FD_INDEXING
 
 // Max filename length will be _loopkb_{FAMILY}.{PROTO}:{INET6_ADDRSTRLEN}:{PORT}:{INET6_ADDRSTRLEN}:{PORT}
 // Family and proto are normally one char each, but allow for 2
@@ -172,8 +178,21 @@ struct ipv6_address_mask_t ipv6_loopback_addresses[32];
 __attribute__((constructor))
 static void _loopkb_nmq_init()
 {
+#ifdef LOOPKB_DIRECT_FD_INDEXING
+	struct rlimit rlim;
+	if (getrlimit(RLIMIT_NOFILE, &rlim) == 0)
+	{
+		loopkb_max_sockets = rlim.rlim_cur;
+		__loopkb_log(log_level_debug, "Setting loopkb_max_sockets %d", loopkb_max_sockets);
+	}
+	else
+	{
+		__loopkb_log(log_level_error, "getrlimit: %s", strerror(errno));
+	}
+#endif
 	if (NULL == socket_file_map)
 	{
+		__loopkb_log(log_level_trace, "Allocating socket_file_map: %zu bytes", sizeof(struct offloaded_socket_t) * loopkb_max_sockets);
 		socket_file_map = malloc(sizeof(struct offloaded_socket_t) * loopkb_max_sockets);
 	}
 
@@ -187,6 +206,7 @@ static void _loopkb_nmq_init()
 
 	if (NULL == udp_socket_destinations)
 	{
+		__loopkb_log(log_level_trace, "Allocating udp_socket_destinations: %zu bytes", sizeof(struct offloaded_socket_t) * loopkb_max_sockets);
 		udp_socket_destinations = malloc(sizeof(struct offloaded_socket_t) * loopkb_max_sockets);
 	}
 
@@ -428,6 +448,12 @@ const char* _loopkb_nmq_generate_filename_for_socket(int sockfd, struct socket_i
 
 int _loopkb_nmq_get_udp_destination_free_index(int sockfd)
 {
+#ifdef LOOPKB_DIRECT_FD_INDEXING
+	assert(sockfd < loopkb_max_sockets);
+	udp_socket_destinations[sockfd].sockfd = sockfd;
+	udp_socket_destinations[sockfd].type = udp;
+	return sockfd;
+#else
 	// TODO Lock or use atomic operation
 	for (size_t i = 0; i < loopkb_max_sockets; ++i)
 	{
@@ -440,10 +466,18 @@ int _loopkb_nmq_get_udp_destination_free_index(int sockfd)
 	}
 
 	return -1;
+#endif
 }
 
 void _loopkb_nmq_remove_udp_destination(int sockfd)
 {
+#ifdef LOOPKB_DIRECT_FD_INDEXING
+	assert(sockfd < loopkb_max_sockets);
+	assert(udp_socket_destinations[sockfd].type == udp);
+	assert(udp_socket_destinations[sockfd].sockfd == sockfd);
+	udp_socket_destinations[sockfd].sockfd = -1;
+	udp_socket_destinations[sockfd].type = unknown;
+#else
 	// TODO Lock or use atomic operation
 	for (size_t i = 0; i < loopkb_max_sockets; ++i)
 	{
@@ -454,10 +488,16 @@ void _loopkb_nmq_remove_udp_destination(int sockfd)
 			__loopkb_log(log_level_trace, "_loopkb_nmq_remove_udp_destination: Removing cached destination at index %zu for socket %d", i, sockfd);
 		}
 	}
+#endif
 }
 
 int _loopkb_nmq_get_free_index(int sockfd)
 {
+#ifdef LOOPKB_DIRECT_FD_INDEXING
+	assert(sockfd < loopkb_max_sockets);
+	socket_file_map[sockfd].sockfd = sockfd;
+	return sockfd;
+#else
 	// TODO Lock or use atomic operation
 	for (size_t i = 0; i < loopkb_max_sockets; ++i)
 	{
@@ -469,10 +509,16 @@ int _loopkb_nmq_get_free_index(int sockfd)
 	}
 
 	return -1;
+#endif
 }
 
 int _loopkb_nmq_remove_index(int index, int sockfd)
 {
+#ifdef LOOPKB_DIRECT_FD_INDEXING
+	assert(sockfd < loopkb_max_sockets);
+	socket_file_map[index].sockfd = -1;
+	return sockfd;
+#else
 	// TODO Lock or use atomic operation
 	if (socket_file_map[index].sockfd == sockfd)
 	{
@@ -481,10 +527,15 @@ int _loopkb_nmq_remove_index(int index, int sockfd)
 	}
 
 	return -1;
+#endif
 }
 
 int _loopkb_nmq_get_index(int sockfd)
 {
+#ifdef LOOPKB_DIRECT_FD_INDEXING
+	assert(sockfd < loopkb_max_sockets);
+	return socket_file_map[sockfd].sockfd == -1 ? -1 : sockfd;
+#else
 	for (size_t i = 0; i < loopkb_max_sockets; ++i)
 	{
 		if (socket_file_map[i].sockfd == sockfd)
@@ -494,6 +545,7 @@ int _loopkb_nmq_get_index(int sockfd)
 	}
 
 	return -1;
+#endif
 }
 
 int _loopkb_nmq_is_offloaded_socket(int sockfd)
@@ -642,6 +694,11 @@ struct context_t* _loopkb_nmq_get_context_for_address_dgram(int sockfd, const st
 
 	if (dest_addr == NULL)
 	{
+#ifdef LOOPKB_DIRECT_FD_INDEXING
+		assert(udp_socket_destinations[sockfd].type == udp);
+		assert(udp_socket_destinations[sockfd].sockfd == sockfd);
+		return udp_socket_destinations[sockfd].context;
+#else
 		// Context should already be in map if dest_addr is NULL. It normally means connect() was already called
 		for (size_t i = 0; i < loopkb_max_sockets; ++i)
 		{
@@ -651,6 +708,7 @@ struct context_t* _loopkb_nmq_get_context_for_address_dgram(int sockfd, const st
 			}
 		}
 		return NULL;
+#endif
 	}
 
 	if (addr4->sin_family == AF_INET)
