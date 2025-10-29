@@ -70,6 +70,7 @@ enum socket_type_t
 	tcp_server = 0,
 	tcp_client = 1,
 	udp = 2,
+	udp_initiator = 3,
 	unknown = UINT8_MAX,
 };
 
@@ -116,6 +117,11 @@ struct offloaded_socket_t
 		struct sockaddr_in addr4;
 	};
 };
+
+static inline bool _is_udp(enum socket_type_t type)
+{
+	return type == udp || type == udp_initiator;
+}
 
 static inline unsigned int _ring_from_data(const struct offloaded_socket_t* offload_socket)
 {
@@ -478,7 +484,7 @@ void _loopkb_nmq_remove_udp_destination(int sockfd)
 {
 #ifdef LOOPKB_DIRECT_FD_INDEXING
 	assert(sockfd < loopkb_max_sockets);
-	assert(udp_socket_destinations[sockfd].type == udp);
+	assert(udp_socket_destinations[sockfd].type == udp || udp_socket_destinations[sockfd].type == udp_initiator);
 	assert(udp_socket_destinations[sockfd].sockfd == sockfd);
 	udp_socket_destinations[sockfd].sockfd = -1;
 	udp_socket_destinations[sockfd].type = unknown;
@@ -486,7 +492,8 @@ void _loopkb_nmq_remove_udp_destination(int sockfd)
 	// TODO Lock or use atomic operation
 	for (size_t i = 0; i < loopkb_max_sockets; ++i)
 	{
-		if (udp_socket_destinations[i].type == udp && udp_socket_destinations[i].sockfd == sockfd)
+		if ((udp_socket_destinations[i].type == udp || udp_socket_destinations[i].type == udp_initiator)
+				&& udp_socket_destinations[i].sockfd == sockfd)
 		{
 			udp_socket_destinations[i].sockfd = -1;
 			udp_socket_destinations[i].type = unknown;
@@ -561,7 +568,7 @@ int _loopkb_nmq_is_offloaded_socket(int sockfd)
 int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_info, int type)
 {
 	__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Adding offloaded socket: %d", sockfd);
-	assert(type == tcp_server || type == tcp_client || type == udp);
+	assert(type == tcp_server || type == tcp_client || type == udp || type == udp_initiator);
 	const int index = _loopkb_nmq_get_free_index(sockfd);
 	if (index < 0)
 	{
@@ -615,7 +622,7 @@ int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_in
 			return -1;
 		}
 	}
-	else if (type == udp)
+	else if (_is_udp(type))
 	{
 		// TODO do not create if file already exists
 		int fd = open(filename, O_RDWR);
@@ -631,6 +638,7 @@ int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_in
 			__loopkb_log(log_level_error, "_loopkb_nmq_add_offloaded_socket: Error creating context %s", strerror(errno));
 			return -1;
 		}
+		socket_file_map[index].type = udp_initiator;
 	}
 
 	const unsigned int ring_from = _ring_from_data(&socket_file_map[index]);
@@ -666,7 +674,7 @@ void _loopkb_nmq_remove_offloaded_socket(int sockfd)
 			}
 		}
 
-		if (socket_file_map[index].type == tcp_server)
+		if (socket_file_map[index].type == tcp_server || socket_file_map[index].type == udp_initiator)
 		{
 			__loopkb_log(log_level_debug, "_loopkb_nmq_remove_offloaded_socket: Removing file %s", filename);
 			unlink(filename);
@@ -700,14 +708,14 @@ struct context_t* _loopkb_nmq_get_context_for_address_dgram(int sockfd, const st
 	if (dest_addr == NULL)
 	{
 #ifdef LOOPKB_DIRECT_FD_INDEXING
-		assert(udp_socket_destinations[sockfd].type == udp);
+		assert(_is_udp(udp_socket_destinations[sockfd].type));
 		assert(udp_socket_destinations[sockfd].sockfd == sockfd);
 		return udp_socket_destinations[sockfd].context;
 #else
 		// Context should already be in map if dest_addr is NULL. It normally means connect() was already called
 		for (size_t i = 0; i < loopkb_max_sockets; ++i)
 		{
-			if (udp_socket_destinations[i].type == udp && udp_socket_destinations[i].sockfd == sockfd)
+			if (_is_udp(udp_socket_destinations[i].type) && udp_socket_destinations[i].sockfd == sockfd)
 			{
 				return udp_socket_destinations[i].context;
 			}
@@ -727,7 +735,7 @@ struct context_t* _loopkb_nmq_get_context_for_address_dgram(int sockfd, const st
 
 	for (size_t i = 0; i < loopkb_max_sockets; ++i)
 	{
-		if (udp_socket_destinations[i].type == udp && memcmp(dest_addr, &udp_socket_destinations[i].addr, addrlen) == 0)
+		if (_is_udp(udp_socket_destinations[i].type) && memcmp(dest_addr, &udp_socket_destinations[i].addr, addrlen) == 0)
 		{
 			return udp_socket_destinations[i].context;
 		}
@@ -966,7 +974,7 @@ int _loopkb_nmq_connect(int sockfd, const struct sockaddr *addr, socklen_t addrl
 		return _sys_connect(sockfd, addr, addrlen);
 	}
 
-	if (type == tcp_client || type == udp)
+	if (type == tcp_client || _is_udp(type))
 	{
 		// Flip direction, as this is a tcp_client, so the server address will be in addr_1
 		_loopkb_nmq_socket_info_flip_direction(&socket_info);
@@ -1124,7 +1132,7 @@ ssize_t _loopkb_nmq_send(int sockfd, const void* buf, size_t len, int flags, con
 		{
 			return _loopkb_nmq_send_offload_stream(index, sockfd, buf, len, flags, dest_addr, addrlen);
 		}
-		else if (socket_file_map[index].type == udp)
+		else if (_is_udp(socket_file_map[index].type))
 		{
 			return _loopkb_nmq_send_offload_dgram(index, sockfd, buf, len, flags, dest_addr, addrlen);
 		}
