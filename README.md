@@ -48,7 +48,38 @@ $ LD_PRELOAD=build/libloopkb.so nc --source 127.0.0.1 127.0.0.1 5000
 ```
 
 ## Performance
-AMD Ryzen 7 PRO 8840U:
+
+### Intel(R) Core(TM) i7-9700K
+ * Without libloopkb: percentile 50.000 = **3.546**
+```
+sockperf: Total 76180 observations; each percentile contains 761.80 observations
+sockperf: ---> <MAX> observation =   39.019
+sockperf: ---> percentile 99.999 =   38.554
+sockperf: ---> percentile 99.990 =   24.600
+sockperf: ---> percentile 99.900 =    5.360
+sockperf: ---> percentile 99.000 =    3.915
+sockperf: ---> percentile 90.000 =    3.718
+sockperf: ---> percentile 75.000 =    3.604
+sockperf: ---> percentile 50.000 =    3.546
+sockperf: ---> percentile 25.000 =    3.508
+sockperf: ---> <MIN> observation =    3.411
+```
+ * With libloopkb: percentile 50.000 = **0.176us**
+```
+sockperf: Total 275263 observations; each percentile contains 2752.63 observations
+sockperf: ---> <MAX> observation =   11.715
+sockperf: ---> percentile 99.999 =    2.441
+sockperf: ---> percentile 99.990 =    0.807
+sockperf: ---> percentile 99.900 =    0.202
+sockperf: ---> percentile 99.000 =    0.188
+sockperf: ---> percentile 90.000 =    0.180
+sockperf: ---> percentile 75.000 =    0.178
+sockperf: ---> percentile 50.000 =    0.176
+sockperf: ---> percentile 25.000 =    0.166
+sockperf: ---> <MIN> observation =    0.105
+```
+
+### AMD Ryzen 7 PRO 8840U
  * Without libloopkb: percentile 50.000 = **8.450us**
 ```
 sockperf: Total 46788 observations; each percentile contains 467.88 observations
