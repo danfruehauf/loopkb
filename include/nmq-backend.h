@@ -22,6 +22,7 @@
 
 #include <netinet/in.h>
 #include <poll.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <sys/select.h>
 #include <sys/socket.h>
