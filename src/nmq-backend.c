@@ -137,23 +137,11 @@ static inline uint16_t _get_port(const struct sockaddr* addr)
 struct offloaded_socket_t* socket_file_map = NULL;
 struct offloaded_socket_t* udp_socket_destinations = NULL;
 
-struct ipv4_address_mask_t
-{
-	uint32_t ip_addr;
-	uint32_t mask;
-};
+size_t ipv4_offloaded_addresses_count = 0;
+struct ipv4_address_mask_t ipv4_offloaded_addresses[32];
 
-struct ipv6_address_mask_t
-{
-	__uint128_t ip_addr;
-	__uint128_t mask;
-};
-
-size_t ipv4_loopback_addresses_count = 0;
-struct ipv4_address_mask_t ipv4_loopback_addresses[32];
-
-size_t ipv6_loopback_addresses_count = 0;
-struct ipv6_address_mask_t ipv6_loopback_addresses[32];
+size_t ipv6_offloaded_addresses_count = 0;
+struct ipv6_address_mask_t ipv6_offloaded_addresses[32];
 
 __attribute__((constructor))
 static void _loopkb_nmq_init()
@@ -198,14 +186,14 @@ static void _loopkb_nmq_init()
 	}
 
 	// 127.0.0.1/8
-	inet_pton(AF_INET, "127.0.0.1", &ipv4_loopback_addresses[0].ip_addr);
-	inet_pton(AF_INET, "255.0.0.0", &ipv4_loopback_addresses[0].mask);
-	++ipv4_loopback_addresses_count;
+	inet_pton(AF_INET, "127.0.0.1", &ipv4_offloaded_addresses[0].ip_addr);
+	inet_pton(AF_INET, "255.0.0.0", &ipv4_offloaded_addresses[0].mask);
+	++ipv4_offloaded_addresses_count;
 
 	// ::1/128
-	inet_pton(AF_INET6, "::1", &ipv6_loopback_addresses[0].ip_addr);
-	inet_pton(AF_INET6, "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", &ipv6_loopback_addresses[0].mask);
-	++ipv6_loopback_addresses_count;
+	inet_pton(AF_INET6, "::1", &ipv6_offloaded_addresses[0].ip_addr);
+	inet_pton(AF_INET6, "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", &ipv6_offloaded_addresses[0].mask);
+	++ipv6_offloaded_addresses_count;
 }
 
 __attribute__((destructor))
@@ -767,11 +755,11 @@ struct context_t* _loopkb_nmq_get_context_for_address_dgram(int sockfd, const st
 	return context;
 }
 
-bool _loopkb_nmq_should_offload_ipv4(uint32_t ip_addr)
+bool _loopkb_nmq_should_offload_ipv4(const struct ipv4_address_mask_t* addresses, size_t addresses_len, uint32_t ip_addr)
 {
-	for (size_t i = 0; i < ipv4_loopback_addresses_count; ++i)
+	for (size_t i = 0; i < addresses_len; ++i)
 	{
-		const struct ipv4_address_mask_t* ipv4_address_mask = &ipv4_loopback_addresses[i];
+		const struct ipv4_address_mask_t* ipv4_address_mask = &addresses[i];
 		if ((ip_addr & ipv4_address_mask->mask) == (ipv4_address_mask->ip_addr & ipv4_address_mask->mask))
 		{
 			return true;
@@ -781,17 +769,17 @@ bool _loopkb_nmq_should_offload_ipv4(uint32_t ip_addr)
 	return false;
 }
 
-bool _loopkb_nmq_should_offload_ipv4_connection(uint32_t ip_addr_1, uint32_t ip_addr_2)
+bool _loopkb_nmq_should_offload_ipv4_connection(const struct ipv4_address_mask_t* addresses, size_t addresses_len, uint32_t ip_addr_1, uint32_t ip_addr_2)
 {
-	return _loopkb_nmq_should_offload_ipv4(ip_addr_1) &&
-		   _loopkb_nmq_should_offload_ipv4(ip_addr_2);
+	return _loopkb_nmq_should_offload_ipv4(addresses, addresses_len, ip_addr_1) &&
+		   _loopkb_nmq_should_offload_ipv4(addresses, addresses_len, ip_addr_2);
 }
 
-bool _loopkb_nmq_should_offload_ipv6(__uint128_t ip_addr)
+bool _loopkb_nmq_should_offload_ipv6(const struct ipv6_address_mask_t* addresses, size_t addresses_len, __uint128_t ip_addr)
 {
-	for (size_t i = 0; i < ipv6_loopback_addresses_count; ++i)
+	for (size_t i = 0; i < addresses_len; ++i)
 	{
-		const struct ipv6_address_mask_t* ipv6_address_mask = &ipv6_loopback_addresses[i];
+		const struct ipv6_address_mask_t* ipv6_address_mask = &addresses[i];
 
 		__m128i ip_addr_128 = (__m128i) ipv6_address_mask->ip_addr;
 		__m128i ip_addr_1_128 = (__m128i) ip_addr;
@@ -809,10 +797,10 @@ bool _loopkb_nmq_should_offload_ipv6(__uint128_t ip_addr)
 	return false;
 }
 
-bool _loopkb_nmq_should_offload_ipv6_connection(__uint128_t ip_addr_1, __uint128_t ip_addr_2)
+bool _loopkb_nmq_should_offload_ipv6_connection(const struct ipv6_address_mask_t* addresses, size_t addresses_len, __uint128_t ip_addr_1, __uint128_t ip_addr_2)
 {
-	return _loopkb_nmq_should_offload_ipv6(ip_addr_1) &&
-		   _loopkb_nmq_should_offload_ipv6(ip_addr_2);
+	return _loopkb_nmq_should_offload_ipv6(addresses, addresses_len, ip_addr_1) &&
+		   _loopkb_nmq_should_offload_ipv6(addresses, addresses_len, ip_addr_2);
 }
 
 bool _loopkb_nmq_should_offload_socket(int sockfd, const struct socket_info_t* socket_info)
@@ -829,7 +817,7 @@ bool _loopkb_nmq_should_offload_socket(int sockfd, const struct socket_info_t* s
 				const struct sockaddr_in* addr4_2 = (struct sockaddr_in*) &socket_info->addr_2;
 				uint32_t ip_addr_1 = *((uint32_t*)(&addr4_1->sin_addr));
 				uint32_t ip_addr_2 = *((uint32_t*)(&addr4_2->sin_addr));
-				return _loopkb_nmq_should_offload_ipv4_connection(ip_addr_1, ip_addr_2);
+				return _loopkb_nmq_should_offload_ipv4_connection(ipv4_offloaded_addresses, ipv4_offloaded_addresses_count, ip_addr_1, ip_addr_2);
 			}
 			else if (socket_info->addr_1.sa_family == AF_INET6)
 			{
@@ -837,7 +825,7 @@ bool _loopkb_nmq_should_offload_socket(int sockfd, const struct socket_info_t* s
 				const struct sockaddr_in6* addr6_2 = (struct sockaddr_in6*) &socket_info->addr_2;
 				__uint128_t ip_addr_1 = *((__uint128_t*)(&addr6_1->sin6_addr));
 				__uint128_t ip_addr_2 = *((__uint128_t*)(&addr6_2->sin6_addr));
-				return _loopkb_nmq_should_offload_ipv6_connection(ip_addr_1, ip_addr_2);
+				return _loopkb_nmq_should_offload_ipv6_connection(ipv6_offloaded_addresses, ipv6_offloaded_addresses_count, ip_addr_1, ip_addr_2);
 			}
 		}
 	}
