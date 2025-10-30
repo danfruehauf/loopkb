@@ -65,6 +65,12 @@ struct ipv6_address_mask_t
 	__uint128_t mask;
 };
 
+extern size_t ipv4_offloaded_addresses_count;
+extern struct ipv4_address_mask_t ipv4_offloaded_addresses[32];
+
+extern size_t ipv6_offloaded_addresses_count;
+extern struct ipv6_address_mask_t ipv6_offloaded_addresses[32];
+
 const char* _loopkb_nmq_generate_filename_for_socket(int sockfd, struct socket_info_t* socket_info, int type, char* buffer, size_t len);
 bool _loopkb_nmq_should_offload_ipv4(const struct ipv4_address_mask_t* addresses, size_t addresses_len, uint32_t ip_addr);
 bool _loopkb_nmq_should_offload_ipv4_connection(const struct ipv4_address_mask_t* addresses, size_t addresses_len, uint32_t ip_addr_1, uint32_t ip_addr_2);

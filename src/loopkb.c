@@ -22,6 +22,7 @@
 #  define _GNU_SOURCE
 #endif
 
+#include <arpa/inet.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -219,6 +220,30 @@ static void _loopkb_init()
 		loopkb_max_sockets = atoi(getenv("LOOPKB_MAX_SOCKETS"));
 	}
 
+	if (getenv("LOOPKB_OFFLOAD_IPV4") != NULL)
+	{
+		_loopkb_parse_offloaded_addresses("LOOPKB_OFFLOAD_IPV4", AF_INET);
+	}
+	else
+	{
+		// 127.0.0.1/8
+		inet_pton(AF_INET, "127.0.0.1", &ipv4_offloaded_addresses[ipv4_offloaded_addresses_count].ip_addr);
+		inet_pton(AF_INET, "255.0.0.0", &ipv4_offloaded_addresses[ipv4_offloaded_addresses_count].mask);
+		++ipv4_offloaded_addresses_count;
+	}
+
+	if (getenv("LOOPKB_OFFLOAD_IPV6") != NULL)
+	{
+		_loopkb_parse_offloaded_addresses("LOOPKB_OFFLOAD_IPV6", AF_INET6);
+	}
+	else
+	{
+		// ::1/128
+		inet_pton(AF_INET6, "::1", &ipv6_offloaded_addresses[ipv6_offloaded_addresses_count].ip_addr);
+		inet_pton(AF_INET6, "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", &ipv6_offloaded_addresses[ipv6_offloaded_addresses_count].mask);
+		++ipv6_offloaded_addresses_count;
+	}
+
 	if (loopkb_log_level_stdout <= log_level_debug)
 	{
 		_loopkb_banner(stdout);
@@ -271,6 +296,58 @@ int _loopkb_banner(FILE* fp)
 	retval += fprintf(fp, "%-*s = %-*s\n", column_width, "LOOPKB_SOCKET_DIR", column_width, loopkb_socket_dir);
 	retval += fprintf(fp, "============================\n");
 	return retval;
+}
+
+int _loopkb_parse_offloaded_addresses(const char* env_variable, int domain)
+{
+	size_t count = 0;
+	__uint128_t ip_addr;
+	__uint128_t mask;
+
+	if (getenv(env_variable) != NULL)
+	{
+		char* s = strdup(getenv(env_variable));
+		char* token = strtok(s, ",");
+		while (token)
+		{
+			char* slash = strchr(token, '/');
+			if (slash)
+			{
+				*slash = '\0';
+				const char* ip = token;
+				const char* netmask = slash + 1;
+
+				if (1 == inet_pton(domain, ip, &ip_addr) && 1 == inet_pton(domain, netmask, &mask))
+				{
+					__loopkb_log(log_level_trace, "%s: Offloading address: %s/%s", env_variable, ip, netmask);
+					if (domain == AF_INET)
+					{
+						struct ipv4_address_mask_t* ipv4_address_mask = &ipv4_offloaded_addresses[ipv4_offloaded_addresses_count];
+						memcpy(&ipv4_address_mask->ip_addr, &ip_addr, sizeof(ipv4_address_mask->ip_addr));
+						memcpy(&ipv4_address_mask->mask, &mask, sizeof(ipv4_address_mask->mask));
+						++ipv4_offloaded_addresses_count;
+						++count;
+					}
+					else if (domain == AF_INET6)
+					{
+						struct ipv6_address_mask_t* ipv6_address_mask = &ipv6_offloaded_addresses[ipv6_offloaded_addresses_count];
+						memcpy(&ipv6_address_mask->ip_addr, &ip_addr, sizeof(ipv6_address_mask->ip_addr));
+						memcpy(&ipv6_address_mask->mask, &mask, sizeof(ipv6_address_mask->mask));
+						++ipv6_offloaded_addresses_count;
+						++count;
+					}
+				}
+				else
+				{
+					__loopkb_log(log_level_error, "%s: Error offloading address: %s/%s", env_variable, ip, netmask);
+				}
+			}
+			token = strtok(NULL, ",");
+		}
+		free(s);
+	}
+
+	return count;
 }
 
 int _loopkb_socket(int domain, int type, int protocol)

@@ -61,6 +61,7 @@ typedef int (*fcntl64_function_t)(int fd, int op, ...);
 typedef int (*sigaction_function_t)(int signum, const struct sigaction* act, struct sigaction* oldact);
 
 int _loopkb_banner(FILE* fp);
+int _loopkb_parse_offloaded_addresses(const char* env_variable, int domain);
 
 int _loopkb_socket(int domain, int type, int protocol);
 int _loopkb_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);

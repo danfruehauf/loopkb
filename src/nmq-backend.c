@@ -185,15 +185,6 @@ static void _loopkb_nmq_init()
 		udp_socket_destinations[i].type = unknown;
 	}
 
-	// 127.0.0.1/8
-	inet_pton(AF_INET, "127.0.0.1", &ipv4_offloaded_addresses[0].ip_addr);
-	inet_pton(AF_INET, "255.0.0.0", &ipv4_offloaded_addresses[0].mask);
-	++ipv4_offloaded_addresses_count;
-
-	// ::1/128
-	inet_pton(AF_INET6, "::1", &ipv6_offloaded_addresses[0].ip_addr);
-	inet_pton(AF_INET6, "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", &ipv6_offloaded_addresses[0].mask);
-	++ipv6_offloaded_addresses_count;
 }
 
 __attribute__((destructor))
