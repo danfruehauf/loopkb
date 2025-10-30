@@ -1,3 +1,4 @@
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <sys/socket.h>
@@ -20,9 +21,32 @@ int clean_suite()
 
 void test_loopkb_nmq_generate_filename_for_socket()
 {
-	int sock = _sys_socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-	CU_ASSERT_TRUE(sock >= 0);
-	_sys_close(sock);
+	char buffer[256];
+	int type = udp;
+	int sock = 10;
+
+	struct socket_info_t socket_info;
+	socket_info.protocol = SOCK_DGRAM;
+	socket_info.addr_1.sa_family = AF_INET;
+	socket_info.addr4_1.sin_addr.s_addr = INADDR_ANY;
+	socket_info.addr4_1.sin_port = ntohs(2000);
+	socket_info.addr_2.sa_family = AF_INET;
+	socket_info.addr4_2.sin_addr.s_addr = INADDR_ANY;
+	socket_info.addr4_2.sin_port = ntohs(5000);
+
+	CU_ASSERT_PTR_NOT_NULL(_loopkb_nmq_generate_filename_for_socket(sock, &socket_info, type, buffer, 256));
+	CU_ASSERT_STRING_EQUAL("_loopkb_ipv4.udp.0.0.0.0:2000:0.0.0.0:5000", buffer);
+
+	socket_info.protocol = SOCK_DGRAM;
+	socket_info.addr_1.sa_family = AF_INET;
+	socket_info.addr4_1.sin_addr.s_addr = inet_addr("127.0.0.2");
+	socket_info.addr4_1.sin_port = ntohs(60550);
+	socket_info.addr_2.sa_family = AF_INET;
+	socket_info.addr4_2.sin_addr.s_addr = inet_addr("192.168.0.1");
+	socket_info.addr4_2.sin_port = ntohs(10010);
+
+	CU_ASSERT_PTR_NOT_NULL(_loopkb_nmq_generate_filename_for_socket(sock, &socket_info, type, buffer, 256));
+	CU_ASSERT_STRING_EQUAL("_loopkb_ipv4.udp.127.0.0.2:60550:192.168.0.1:10010", buffer);
 }
 
 int main()

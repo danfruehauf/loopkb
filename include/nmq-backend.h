@@ -27,6 +27,33 @@
 #include <sys/socket.h>
 #include <time.h>
 
+struct socket_info_t
+{
+	union
+	{
+		struct sockaddr addr_1;
+		struct sockaddr_in6 addr6_1; // Largest member
+		struct sockaddr_in addr4_1;
+	};
+	union
+	{
+		struct sockaddr addr_2;
+		struct sockaddr_in6 addr6_2; // Largest member
+		struct sockaddr_in addr4_2;
+	};
+	int protocol;
+};
+
+enum socket_type_t
+{
+	tcp_server = 0,
+	tcp_client = 1,
+	udp = 2,
+	udp_initiator = 3,
+	unknown = UINT8_MAX,
+};
+
+const char* _loopkb_nmq_generate_filename_for_socket(int sockfd, struct socket_info_t* socket_info, int type, char* buffer, size_t len);
 char* _loopkb_nmq_inet_ntop(const struct sockaddr* addr, char* retval);
 int _loopkb_nmq_socket(int sockfd, int domain, int type, int protocol);
 int _loopkb_nmq_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);

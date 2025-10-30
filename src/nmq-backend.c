@@ -65,15 +65,6 @@ enum channel_type_t
 	total_channels_tcp = 4,
 };
 
-enum socket_type_t
-{
-	tcp_server = 0,
-	tcp_client = 1,
-	udp = 2,
-	udp_initiator = 3,
-	unknown = UINT8_MAX,
-};
-
 struct offloaded_packet_t
 {
 	union
@@ -86,23 +77,6 @@ struct offloaded_packet_t
 };
 
 const size_t loopkb_offloaded_packet_payload_size = sizeof(struct sockaddr_in6);
-
-struct socket_info_t
-{
-	union
-	{
-		struct sockaddr addr_1;
-		struct sockaddr_in6 addr6_1; // Largest member
-		struct sockaddr_in addr4_1;
-	};
-	union
-	{
-		struct sockaddr addr_2;
-		struct sockaddr_in6 addr6_2; // Largest member
-		struct sockaddr_in addr4_2;
-	};
-	int protocol;
-};
 
 struct offloaded_socket_t
 {
