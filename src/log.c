@@ -47,7 +47,7 @@ int __loopkb_log(enum log_level_t log_level, const char* format, ...)
 
 int __loopkb_log_args(enum log_level_t log_level, const char* format, va_list args)
 {
-	static __thread char lineBuffer[MAX_LINE_LENGTH];
+	static __thread char line_buffer[MAX_LINE_LENGTH];
 	FILE* stream = NULL;
 
 	if ((int) log_level >= (int) loopkb_log_level_stdout)
@@ -65,9 +65,9 @@ int __loopkb_log_args(enum log_level_t log_level, const char* format, va_list ar
 		return 0;
 	}
 
-	int byteCount = snprintf(lineBuffer, MAX_LINE_LENGTH, "%s: ", log_level_strings[log_level]);
-	vsnprintf(lineBuffer + byteCount, MAX_LINE_LENGTH - byteCount, format, args);
-	int retval = fprintf(stream, "%s\n", lineBuffer);
+	int byte_count = snprintf(line_buffer, MAX_LINE_LENGTH, "%s: ", log_level_strings[log_level]);
+	vsnprintf(line_buffer + byte_count, MAX_LINE_LENGTH - byte_count, format, args);
+	int retval = fprintf(stream, "%s\n", line_buffer);
 	fflush(stream);
 	return retval;
 }
