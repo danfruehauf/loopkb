@@ -95,6 +95,7 @@ extern int _loopkb_interruped;
 extern char loopkb_log_level[16];
 extern char loopkb_socket_dir[128];
 extern size_t loopkb_ring_size;
+extern size_t loopkb_ring_warmup_rounds;
 extern size_t loopkb_packet_size;
 extern size_t loopkb_offloaded_packet_size;
 extern size_t loopkb_max_sockets;

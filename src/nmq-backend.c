@@ -531,6 +531,12 @@ int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_in
 			__loopkb_log(log_level_error, "_loopkb_nmq_add_offloaded_socket: Error creating context %s", strerror(errno));
 			return -1;
 		}
+
+		if (loopkb_ring_warmup_rounds > 0)
+		{
+			__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: context_warmup %s rounds %zu", filename, loopkb_ring_warmup_rounds);
+			context_warmup(socket_file_map[index].context, loopkb_ring_warmup_rounds);
+		}
 	}
 	else if (type == tcp_client)
 	{
@@ -567,6 +573,12 @@ int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_in
 			return -1;
 		}
 		socket_file_map[index].type = udp_initiator;
+
+		if (loopkb_ring_warmup_rounds > 0)
+		{
+			__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: context_warmup %s rounds %zu", filename, loopkb_ring_warmup_rounds);
+			context_warmup(socket_file_map[index].context, loopkb_ring_warmup_rounds);
+		}
 	}
 
 	const unsigned int ring_from = _ring_from_data(&socket_file_map[index]);

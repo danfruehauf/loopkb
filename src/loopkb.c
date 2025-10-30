@@ -41,6 +41,7 @@
 char loopkb_log_level[16];
 char loopkb_socket_dir[128];
 size_t loopkb_ring_size = 15;
+size_t loopkb_ring_warmup_rounds = 0;
 size_t loopkb_packet_size = LOOPKB_PACKET_SIZE_MAX;
 size_t loopkb_offloaded_packet_size = LOOPKB_PACKET_SIZE_MAX;
 size_t loopkb_max_sockets = 128;
@@ -206,6 +207,11 @@ static void _loopkb_init()
 		loopkb_ring_size = atoi(getenv("LOOPKB_RING_SIZE"));
 	}
 
+	if (getenv("LOOPKB_RING_WARMUP_ROUNDS") != NULL)
+	{
+		loopkb_ring_warmup_rounds = atoi(getenv("LOOPKB_RING_WARMUP_ROUNDS"));
+	}
+
 	if (getenv("LOOPKB_PACKET_SIZE") != NULL)
 	{
 		loopkb_packet_size = atoi(getenv("LOOPKB_PACKET_SIZE"));
@@ -309,7 +315,7 @@ const char* _loopkb_offloaded_addresses_to_str(struct address_mask_t* offloaded_
 
 int _loopkb_banner(FILE* fp)
 {
-	int column_width = 20;
+	int column_width = 30;
 
 	size_t offload_socket_buffer_size = 2048;
 	char offload_socket_buffer[2048];
@@ -320,6 +326,7 @@ int _loopkb_banner(FILE* fp)
 	retval += fprintf(fp, "============================\n");
 	retval += fprintf(fp, "%-*s = %-*s\n", column_width, "LOOPKB_LOG_LEVEL", column_width, loopkb_log_level);
 	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_RING_SIZE", column_width, loopkb_ring_size);
+	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_RING_WARMUP_ROUNDS", column_width, loopkb_ring_warmup_rounds);
 	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_PACKET_SIZE", column_width, loopkb_packet_size);
 	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_MAX_SOCKETS", column_width, loopkb_max_sockets);
 	retval += fprintf(fp, "%-*s = %-*s\n", column_width, "LOOPKB_SOCKET_DIR", column_width, loopkb_socket_dir);

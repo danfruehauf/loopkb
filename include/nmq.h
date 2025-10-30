@@ -263,3 +263,32 @@ bool context_can_recv(struct context_t* context_, unsigned int from, unsigned in
 	const unsigned int h = ring->_head;
 	return h != t;
 }
+
+void context_warmup_ring(struct context_t* context_, unsigned int from, unsigned int to, size_t rounds)
+{
+	size_t size;
+	char buffer[1500];
+	memset(buffer, 0, 1500);
+	struct ring *ring = context_get_ring(context_, from, to);
+
+	for (size_t round = 0; round < rounds; ++rounds)
+	{
+		for (size_t i = 0; i < ring->_size; ++i)
+		{
+			context_send_ring(context_, ring, buffer, 1500);
+		}
+
+		for (size_t i = 0; i < ring->_size; ++i)
+		{
+			context_recv_ring(context_, ring, buffer, &size, false);
+		}
+	}
+}
+
+void context_warmup(struct context_t* context_, int rounds)
+{
+	for (unsigned int from = 0, to = 1; to < context_->size_; ++from, ++to)
+	{
+		context_warmup_ring(context_, from, to, rounds);
+	}
+}

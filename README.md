@@ -87,15 +87,16 @@ sockperf: ---> percentile 25.000 =    0.155
 sockperf: ---> <MIN> observation =    0.105
 ```
 
-# Environment Variables
-| Name                | Default Value               | Description                                 |
-|---------------------|-----------------------------|---------------------------------------------|
-| LOOPKB_LOG_LEVEL    | warn                        | Can be trace, debug, info, warn, error      |
-| LOOPKB_RING_SIZE    | 15                          | Number of items in each ring buffer         |
-| LOOPKB_PACKET_SIZE  | 1500                        | Max item size in each ring buffer           |
-| LOOPKB_MAX_SOCKETS  | 128                         | Max offloaded sockets                       |
-| LOOPKB_SOCEKT_DIR   | nil (current dir)           | Directory to keep socket/context files      |
-| LOOPKB_OFFLOAD_ADDR | 127.0.0.1/255.0.0.0,::1/128 | Addresses/masks to offload, comma separated |
+<<<<<<< HEAD
+| Name                      | Default Value               | Description                                     |
+|---------------------------|-----------------------------|-------------------------------------------------|
+| LOOPKB_LOG_LEVEL          | warn                        | Can be trace, debug, info, warn, error          |
+| LOOPKB_RING_SIZE          | 15                          | Number of items in each ring buffer             |
+| LOOPKB_RING_WARMUP_ROUNDS | 0                           | Warmup rounds for ring buffers (recommended: 1) |
+| LOOPKB_PACKET_SIZE        | 1500                        | Max item size in each ring buffer               |
+| LOOPKB_MAX_SOCKETS        | 128                         | Max offloaded sockets                           |
+| LOOPKB_SOCEKT_DIR         | nil (current dir)           | Directory to keep socket/context files          |
+| LOOPKB_OFFLOAD_ADDR       | 127.0.0.1/255.0.0.0,::1/128 | Addresses/masks to offload, comma separated     |
 
 ## TODO
 Lots, to begin with. But here is a partial list:
