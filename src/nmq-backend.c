@@ -390,7 +390,7 @@ const char* _loopkb_nmq_generate_filename_for_socket(int sockfd, struct socket_i
 int _loopkb_nmq_get_udp_destination_free_index(int sockfd)
 {
 #ifdef LOOPKB_DIRECT_FD_INDEXING
-	assert(sockfd < loopkb_max_sockets);
+	assert(sockfd < (int) loopkb_max_sockets);
 	udp_socket_destinations[sockfd].sockfd = sockfd;
 	udp_socket_destinations[sockfd].type = udp;
 	return sockfd;
@@ -413,7 +413,7 @@ int _loopkb_nmq_get_udp_destination_free_index(int sockfd)
 void _loopkb_nmq_remove_udp_destination(int sockfd)
 {
 #ifdef LOOPKB_DIRECT_FD_INDEXING
-	assert(sockfd < loopkb_max_sockets);
+	assert(sockfd < (int) loopkb_max_sockets);
 	assert(udp_socket_destinations[sockfd].type == udp || udp_socket_destinations[sockfd].type == udp_initiator);
 	assert(udp_socket_destinations[sockfd].sockfd == sockfd);
 	udp_socket_destinations[sockfd].sockfd = -1;
@@ -436,7 +436,7 @@ void _loopkb_nmq_remove_udp_destination(int sockfd)
 int _loopkb_nmq_get_free_index(int sockfd)
 {
 #ifdef LOOPKB_DIRECT_FD_INDEXING
-	assert(sockfd < loopkb_max_sockets);
+	assert(sockfd < (int) loopkb_max_sockets);
 	socket_file_map[sockfd].sockfd = sockfd;
 	return sockfd;
 #else
@@ -457,7 +457,7 @@ int _loopkb_nmq_get_free_index(int sockfd)
 int _loopkb_nmq_remove_index(int index, int sockfd)
 {
 #ifdef LOOPKB_DIRECT_FD_INDEXING
-	assert(sockfd < loopkb_max_sockets);
+	assert(sockfd < (int) loopkb_max_sockets);
 	socket_file_map[index].sockfd = -1;
 	return sockfd;
 #else
@@ -475,7 +475,7 @@ int _loopkb_nmq_remove_index(int index, int sockfd)
 int _loopkb_nmq_get_index(int sockfd)
 {
 #ifdef LOOPKB_DIRECT_FD_INDEXING
-	assert(sockfd < loopkb_max_sockets);
+	assert(sockfd < (int) loopkb_max_sockets);
 	return socket_file_map[sockfd].sockfd == -1 ? -1 : sockfd;
 #else
 	for (size_t i = 0; i < loopkb_max_sockets; ++i)

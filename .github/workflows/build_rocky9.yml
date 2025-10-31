@@ -1,0 +1,41 @@
+---
+name: Build and Test (Rocky 9)
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+
+    container:
+      image: rockylinux:9
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          dnf -y install dnf-plugins-core
+          dnf config-manager --set-enabled crb
+          dnf -y install epel-release
+          dnf -y install cmake gcc gcc-c++ make CUnit-devel
+
+      - name: Configure and build (${{ matrix.build_type }})
+        run: |
+          mkdir -p build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ..
+          cmake --build .
+
+      - name: Run tests (${{ matrix.build_type }})
+        working-directory: build
+        run: ctest --output-on-failure
