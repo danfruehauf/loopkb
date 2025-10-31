@@ -16,6 +16,14 @@ or a contribution.
 $ (mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release ..  && cmake --build . && ctest)
 ```
 
+### Status
+| Platform       | Status                                                                                                              |
+|----------------|---------------------------------------------------------------------------------------------------------------------|
+| Fedora Latest  | ![Fedora Latest Build](https://github.com/danfruehauf/loopkb/actions/workflows/build_fedora_latest.yml/badge.svg)   |
+| Fedora Rawhide | ![Fedora Rawhide Build](https://github.com/danfruehauf/loopkb/actions/workflows/build_fedora_rawhide.yml/badge.svg) |
+| Rocky 9        | ![Rocky 9 Build](https://github.com/danfruehauf/loopkb/actions/workflows/build_rocky_9.yml/badge.svg)               |
+| Ubuntu Latest  | ![Ubuntu Latest Build](https://github.com/danfruehauf/loopkb/actions/workflows/build_ubuntu_latest.yml/badge.svg)   |
+
 ## Example Usage
 
 ### sockperf
