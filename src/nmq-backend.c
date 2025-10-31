@@ -137,12 +137,6 @@ static inline uint16_t _get_port(const struct sockaddr* addr)
 struct offloaded_socket_t* socket_file_map = NULL;
 struct offloaded_socket_t* udp_socket_destinations = NULL;
 
-size_t ipv4_offloaded_addresses_count = 0;
-struct ipv4_address_mask_t ipv4_offloaded_addresses[32];
-
-size_t ipv6_offloaded_addresses_count = 0;
-struct ipv6_address_mask_t ipv6_offloaded_addresses[32];
-
 __attribute__((constructor))
 static void _loopkb_nmq_init()
 {
@@ -353,20 +347,9 @@ void _loopkb_nmq_socket_info_debug(const struct socket_info_t* socket_info)
 	const uint16_t port_2 = _get_port(&socket_info->addr_2);
 
 	const char* protocol_str = socket_info->protocol == SOCK_STREAM ? "tcp" : socket_info->protocol == SOCK_DGRAM ? "udp" : "unknown";
+	const char* domain_str = socket_info->addr_1.sa_family == AF_INET ? "ipv4" : socket_info->addr_1.sa_family == AF_INET6 ? "ipv6" : "unknown";
 
-	if (socket_info->addr_1.sa_family == AF_INET)
-	{
-		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv4.%s.%s:%d:%s:%d", protocol_str, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
-	}
-	else if (socket_info->addr_1.sa_family == AF_INET6)
-	{
-		snprintf(buffer, len, LOOPKB_FILE_PREFIX "ipv6.%s.%s:%d:%s:%d", protocol_str, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
-	}
-	else
-	{
-		// TODO
-		//snprintf(buffer, len, LOOPKB_FILE_PREFIX "%d.%s.%u:%d:%u:%d", socket_info->addr_1.sin_family, protocol_str, socket_info->ipv4.ip_addr_1, port_1, socket_info->ipv4.ip_addr_2, port_2);
-	}
+	snprintf(buffer, len, LOOPKB_FILE_PREFIX "%s.%s.%s:%d:%s:%d", domain_str, protocol_str, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
 }
 
 const char* _loopkb_nmq_generate_filename_for_socket(int sockfd, struct socket_info_t* socket_info, int type, char* buffer, size_t len)
@@ -389,22 +372,16 @@ const char* _loopkb_nmq_generate_filename_for_socket(int sockfd, struct socket_i
 		offset = sprintf(buffer, "%s/", loopkb_socket_dir);
 	}
 
-	const char* protocol_str = socket_info->protocol == SOCK_STREAM ? "tcp" : socket_info->protocol == SOCK_DGRAM ? "udp" : "unknown";
-
-	if (socket_info->addr_1.sa_family == AF_INET)
+	if (socket_info->addr_1.sa_family != AF_INET && socket_info->addr_1.sa_family != AF_INET6)
 	{
-		snprintf(buffer + offset, len, LOOPKB_FILE_PREFIX "ipv4.%s.%s:%d:%s:%d", protocol_str, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
-	}
-	else if (socket_info->addr_1.sa_family == AF_INET6)
-	{
-		snprintf(buffer + offset, len, LOOPKB_FILE_PREFIX "ipv6.%s.%s:%d:%s:%d", protocol_str, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
-	}
-	else
-	{
-		// TODO
-		//snprintf(buffer + offset, len, LOOPKB_FILE_PREFIX "%d.%s.%u:%d:%u:%d", socket_info->addr_1.sin_family, protocol_str, socket_info->ipv4.ip_addr_1, port_1, socket_info->ipv4.ip_addr_2, port_2);
+		__loopkb_log(log_level_warning, "_loopkb_nmq_generate_filename_for_socket: Socket %d has unsupported sa_family of %d", sockfd, socket_info->addr_1.sa_family);
 		return NULL;
 	}
+
+	const char* protocol_str = socket_info->protocol == SOCK_STREAM ? "tcp" : socket_info->protocol == SOCK_DGRAM ? "udp" : "unknown";
+	const char* domain_str = socket_info->addr_1.sa_family == AF_INET ? "ipv4" : socket_info->addr_1.sa_family == AF_INET6 ? "ipv6" : "unknown";
+
+	snprintf(buffer + offset, len, LOOPKB_FILE_PREFIX "%s.%s.%s:%d:%s:%d", domain_str, protocol_str, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
 
 	__loopkb_log(log_level_debug, "_loopkb_nmq_generate_filename_for_socket: Socket %d will use filename %s", sockfd, buffer);
 	return buffer;
@@ -746,52 +723,56 @@ struct context_t* _loopkb_nmq_get_context_for_address_dgram(int sockfd, const st
 	return context;
 }
 
-bool _loopkb_nmq_should_offload_ipv4(const struct ipv4_address_mask_t* addresses, size_t addresses_len, uint32_t ip_addr)
+bool _loopkb_nmq_should_offload(const struct address_mask_t* addresses, size_t addresses_len, const struct sockaddr* ip_addr)
 {
+	const struct sockaddr_in* ip_addr4 = (const struct sockaddr_in*) ip_addr;
+	const struct sockaddr_in6* ip_addr6 = (const struct sockaddr_in6*) ip_addr;
+
 	for (size_t i = 0; i < addresses_len; ++i)
 	{
-		const struct ipv4_address_mask_t* ipv4_address_mask = &addresses[i];
-		if ((ip_addr & ipv4_address_mask->mask) == (ipv4_address_mask->ip_addr & ipv4_address_mask->mask))
+		const struct sockaddr_in* ip_addr_2 = &addresses[i].addr4;
+		const struct sockaddr_in6* ip_addr6_2 = &addresses[i].addr6;
+
+		if (ip_addr4->sin_family == AF_INET && ip_addr_2->sin_family == AF_INET)
 		{
-			return true;
+			const struct sockaddr_in* mask4 = &addresses[i].mask4;
+
+			if ((ip_addr4->sin_addr.s_addr & mask4->sin_addr.s_addr) == (ip_addr_2->sin_addr.s_addr & mask4->sin_addr.s_addr))
+			{
+				return true;
+			}
+		}
+		else if (ip_addr6->sin6_family == AF_INET6 && ip_addr6_2->sin6_family)
+		{
+			const struct sockaddr_in6* mask6 = &addresses[i].mask6;
+
+			// For reference purposes
+			//__m128i ip_addr_128 = (__m128i) ip_addr6_2->sin6_addr.s6_addr;
+			//__m128i ip_addr_2_128 = (__m128i) ip_addr6->sin6_addr.s6_addr;
+			//__m128i mask_128 = (__m128i) mask6->sin6_addr.s6_addr;
+
+			__m128i ip_addr_128, ip_addr_2_128, mask_128;
+			memcpy(&ip_addr_128, ip_addr6_2->sin6_addr.s6_addr, sizeof(__m128i));
+			memcpy(&ip_addr_2_128, ip_addr6_2->sin6_addr.s6_addr, sizeof(__m128i));
+			memcpy(&mask_128, mask6->sin6_addr.s6_addr, sizeof(__m128i));
+
+			__m128i ip_addr_after_mask = _mm_and_si128(ip_addr_128, mask_128);;
+			__m128i ip_addr_1_after_mask = _mm_and_si128(ip_addr_2_128, mask_128);
+
+			if (memcmp(&ip_addr_after_mask, &ip_addr_1_after_mask, sizeof(__m128i)) == 0)
+			{
+				return true;
+			}
 		}
 	}
 
 	return false;
 }
 
-bool _loopkb_nmq_should_offload_ipv4_connection(const struct ipv4_address_mask_t* addresses, size_t addresses_len, uint32_t ip_addr_1, uint32_t ip_addr_2)
+bool _loopkb_nmq_should_offload_connection(const struct address_mask_t* addresses, size_t addresses_len, const struct sockaddr* ip_addr_1, const struct sockaddr* ip_addr_2)
 {
-	return _loopkb_nmq_should_offload_ipv4(addresses, addresses_len, ip_addr_1) &&
-		   _loopkb_nmq_should_offload_ipv4(addresses, addresses_len, ip_addr_2);
-}
-
-bool _loopkb_nmq_should_offload_ipv6(const struct ipv6_address_mask_t* addresses, size_t addresses_len, __uint128_t ip_addr)
-{
-	for (size_t i = 0; i < addresses_len; ++i)
-	{
-		const struct ipv6_address_mask_t* ipv6_address_mask = &addresses[i];
-
-		__m128i ip_addr_128 = (__m128i) ipv6_address_mask->ip_addr;
-		__m128i ip_addr_1_128 = (__m128i) ip_addr;
-		__m128i mask_128 = (__m128i) ipv6_address_mask->mask;
-
-		__m128i ip_addr_after_mask = _mm_and_si128(ip_addr_128, mask_128);;
-		__m128i ip_addr_1_after_mask = _mm_and_si128(ip_addr_1_128, mask_128);
-
-		if (memcmp(&ip_addr_after_mask, &ip_addr_1_after_mask, sizeof(__m128i)) == 0)
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-
-bool _loopkb_nmq_should_offload_ipv6_connection(const struct ipv6_address_mask_t* addresses, size_t addresses_len, __uint128_t ip_addr_1, __uint128_t ip_addr_2)
-{
-	return _loopkb_nmq_should_offload_ipv6(addresses, addresses_len, ip_addr_1) &&
-		   _loopkb_nmq_should_offload_ipv6(addresses, addresses_len, ip_addr_2);
+	return _loopkb_nmq_should_offload(addresses, addresses_len, ip_addr_1) &&
+		   _loopkb_nmq_should_offload(addresses, addresses_len, ip_addr_2);
 }
 
 bool _loopkb_nmq_should_offload_socket(int sockfd, const struct socket_info_t* socket_info)
@@ -802,22 +783,7 @@ bool _loopkb_nmq_should_offload_socket(int sockfd, const struct socket_info_t* s
 		const uint16_t port_2 = _get_port(&socket_info->addr_2);
 		if (port_1 != 0 && port_2 != 0) // Avoid listening sockets
 		{
-			if (socket_info->addr_1.sa_family == AF_INET)
-			{
-				const struct sockaddr_in* addr4_1 = (struct sockaddr_in*) &socket_info->addr_1;
-				const struct sockaddr_in* addr4_2 = (struct sockaddr_in*) &socket_info->addr_2;
-				uint32_t ip_addr_1 = *((uint32_t*)(&addr4_1->sin_addr));
-				uint32_t ip_addr_2 = *((uint32_t*)(&addr4_2->sin_addr));
-				return _loopkb_nmq_should_offload_ipv4_connection(ipv4_offloaded_addresses, ipv4_offloaded_addresses_count, ip_addr_1, ip_addr_2);
-			}
-			else if (socket_info->addr_1.sa_family == AF_INET6)
-			{
-				const struct sockaddr_in6* addr6_1 = (struct sockaddr_in6*) &socket_info->addr_1;
-				const struct sockaddr_in6* addr6_2 = (struct sockaddr_in6*) &socket_info->addr_2;
-				__uint128_t ip_addr_1 = *((__uint128_t*)(&addr6_1->sin6_addr));
-				__uint128_t ip_addr_2 = *((__uint128_t*)(&addr6_2->sin6_addr));
-				return _loopkb_nmq_should_offload_ipv6_connection(ipv6_offloaded_addresses, ipv6_offloaded_addresses_count, ip_addr_1, ip_addr_2);
-			}
+			return _loopkb_nmq_should_offload_connection(offloaded_addresses, offloaded_addresses_count, &socket_info->addr_1, &socket_info->addr_2);
 		}
 	}
 

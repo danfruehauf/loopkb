@@ -49,33 +49,43 @@ void test_loopkb_nmq_generate_filename_for_socket()
 	CU_ASSERT_STRING_EQUAL("_loopkb_ipv4.udp.127.0.0.2:60550:192.168.0.1:10010", buffer);
 }
 
-void test_loopkb_nmq_should_offload_ipv4()
+void test_loopkb_nmq_should_offload()
 {
-	size_t ipv4_offloaded_addresses_count = 0;
-	struct ipv4_address_mask_t ipv4_offloaded_addresses[4];
+	size_t offloaded_addresses_count = 0;
+	struct address_mask_t offloaded_addresses[4];
 
-	inet_pton(AF_INET, "127.0.0.1", &ipv4_offloaded_addresses[0].ip_addr);
-	inet_pton(AF_INET, "255.0.0.0", &ipv4_offloaded_addresses[0].mask);
-	++ipv4_offloaded_addresses_count;
+	struct sockaddr_in* ip_addr_0 = &offloaded_addresses[offloaded_addresses_count].addr4;
+	struct sockaddr_in* mask_0 = &offloaded_addresses[offloaded_addresses_count].mask4;
+	inet_pton(AF_INET, "127.0.0.1", &ip_addr_0->sin_addr);
+	inet_pton(AF_INET, "255.0.0.0", &mask_0->sin_addr);
+	ip_addr_0->sin_family = AF_INET;
+	++offloaded_addresses_count;
 
-	inet_pton(AF_INET, "192.168.0.1", &ipv4_offloaded_addresses[1].ip_addr);
-	inet_pton(AF_INET, "255.255.255.255", &ipv4_offloaded_addresses[1].mask);
-	++ipv4_offloaded_addresses_count;
+	struct sockaddr_in* ip_addr_1 = &offloaded_addresses[offloaded_addresses_count].addr4;
+	struct sockaddr_in* mask_1 = &offloaded_addresses[offloaded_addresses_count].mask4;
+	inet_pton(AF_INET, "192.168.0.1", &ip_addr_1->sin_addr);
+	inet_pton(AF_INET, "255.255.255.255", &mask_1->sin_addr);
+	ip_addr_1->sin_family = AF_INET;
+	++offloaded_addresses_count;
 
-	uint32_t ip_addr = INADDR_ANY;
-	CU_ASSERT_FALSE(_loopkb_nmq_should_offload_ipv4(ipv4_offloaded_addresses, ipv4_offloaded_addresses_count, ip_addr));
+	struct sockaddr ip_addr;
+	struct sockaddr_in* ip_addr4 = (struct sockaddr_in*) &ip_addr;;
+	ip_addr4->sin_family = AF_INET;
 
-	inet_pton(AF_INET, "127.0.0.1", &ip_addr);
-	CU_ASSERT_TRUE(_loopkb_nmq_should_offload_ipv4(ipv4_offloaded_addresses, ipv4_offloaded_addresses_count, ip_addr));
+	CU_ASSERT_EQUAL(1, inet_pton(AF_INET, "0.0.0.0", &ip_addr4->sin_addr));
+	CU_ASSERT_FALSE(_loopkb_nmq_should_offload(offloaded_addresses, offloaded_addresses_count, &ip_addr));
 
-	inet_pton(AF_INET, "127.0.0.2", &ip_addr);
-	CU_ASSERT_TRUE(_loopkb_nmq_should_offload_ipv4(ipv4_offloaded_addresses, ipv4_offloaded_addresses_count, ip_addr));
+	CU_ASSERT_EQUAL(1, inet_pton(AF_INET, "127.0.0.1", &ip_addr4->sin_addr));
+	CU_ASSERT_TRUE(_loopkb_nmq_should_offload(offloaded_addresses, offloaded_addresses_count, &ip_addr));
 
-	inet_pton(AF_INET, "128.0.0.2", &ip_addr);
-	CU_ASSERT_FALSE(_loopkb_nmq_should_offload_ipv4(ipv4_offloaded_addresses, ipv4_offloaded_addresses_count, ip_addr));
+	CU_ASSERT_EQUAL(1, inet_pton(AF_INET, "127.0.0.2", &ip_addr4->sin_addr));
+	CU_ASSERT_TRUE(_loopkb_nmq_should_offload(offloaded_addresses, offloaded_addresses_count, &ip_addr));
 
-	inet_pton(AF_INET, "192.168.0.1", &ip_addr);
-	CU_ASSERT_TRUE(_loopkb_nmq_should_offload_ipv4(ipv4_offloaded_addresses, ipv4_offloaded_addresses_count, ip_addr));
+	CU_ASSERT_EQUAL(1, inet_pton(AF_INET, "128.0.0.2", &ip_addr4->sin_addr));
+	CU_ASSERT_FALSE(_loopkb_nmq_should_offload(offloaded_addresses, offloaded_addresses_count, &ip_addr));
+
+	CU_ASSERT_EQUAL(1, inet_pton(AF_INET, "192.168.0.1", &ip_addr4->sin_addr));
+	CU_ASSERT_TRUE(_loopkb_nmq_should_offload(offloaded_addresses, offloaded_addresses_count, &ip_addr));
 }
 
 int main()
@@ -84,7 +94,7 @@ int main()
 
 	CU_pSuite suite = CU_add_suite("LoopKB", init_suite, clean_suite);
 	CU_add_test(suite, "test _loopkb_nmq_generate_filename_for_socket", test_loopkb_nmq_generate_filename_for_socket);
-	CU_add_test(suite, "test _loopkb_nmq_should_offload_ipv4", test_loopkb_nmq_should_offload_ipv4);
+	CU_add_test(suite, "test _loopkb_nmq_should_offload", test_loopkb_nmq_should_offload);
 
 	CU_basic_run_tests();
 	const int retval = CU_get_number_of_failures();

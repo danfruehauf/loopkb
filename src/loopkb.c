@@ -44,6 +44,8 @@ size_t loopkb_ring_size = 15;
 size_t loopkb_packet_size = LOOPKB_PACKET_SIZE_MAX;
 size_t loopkb_offloaded_packet_size = LOOPKB_PACKET_SIZE_MAX;
 size_t loopkb_max_sockets = 128;
+size_t offloaded_addresses_count = 0;
+struct address_mask_t offloaded_addresses[32];
 
 socket_function_t _sys_socket = NULL;
 connect_function_t _sys_bind = NULL;
@@ -220,28 +222,14 @@ static void _loopkb_init()
 		loopkb_max_sockets = atoi(getenv("LOOPKB_MAX_SOCKETS"));
 	}
 
-	if (getenv("LOOPKB_OFFLOAD_IPV4") != NULL)
+	if (getenv("LOOPKB_OFFLOAD_ADDR") != NULL)
 	{
-		_loopkb_parse_offloaded_addresses("LOOPKB_OFFLOAD_IPV4", AF_INET);
+		_loopkb_parse_offloaded_addresses(getenv("LOOPKB_OFFLOAD_ADDR"));
 	}
 	else
 	{
-		// 127.0.0.1/8
-		inet_pton(AF_INET, "127.0.0.1", &ipv4_offloaded_addresses[ipv4_offloaded_addresses_count].ip_addr);
-		inet_pton(AF_INET, "255.0.0.0", &ipv4_offloaded_addresses[ipv4_offloaded_addresses_count].mask);
-		++ipv4_offloaded_addresses_count;
-	}
-
-	if (getenv("LOOPKB_OFFLOAD_IPV6") != NULL)
-	{
-		_loopkb_parse_offloaded_addresses("LOOPKB_OFFLOAD_IPV6", AF_INET6);
-	}
-	else
-	{
-		// ::1/128
-		inet_pton(AF_INET6, "::1", &ipv6_offloaded_addresses[ipv6_offloaded_addresses_count].ip_addr);
-		inet_pton(AF_INET6, "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", &ipv6_offloaded_addresses[ipv6_offloaded_addresses_count].mask);
-		++ipv6_offloaded_addresses_count;
+		// 127.0.0.1/8 and ::1/128 by default
+		_loopkb_parse_offloaded_addresses("127.0.0.1/255.255.255.0,::1/ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff");
 	}
 
 	if (loopkb_log_level_stdout <= log_level_debug)
@@ -281,9 +269,50 @@ static void _loopkb_init()
 #pragma GCC diagnostic pop
 }
 
+const char* _loopkb_offloaded_addresses_to_str(struct address_mask_t* offloaded_addresses, size_t offloaded_addresses_count, char* buffer, size_t size)
+{
+	if (size > 0)
+	{
+		buffer[0] = '\0';
+	}
+
+	char ip_addr_str[INET6_ADDRSTRLEN];
+	char mask_str[INET6_ADDRSTRLEN];
+
+	int offset = 0;
+	for (size_t i = 0; i < offloaded_addresses_count; ++i)
+	{
+		struct address_mask_t* address_mask = &offloaded_addresses[i];
+
+		_loopkb_nmq_inet_ntop((const struct sockaddr*) &address_mask->addr, ip_addr_str);
+		_loopkb_nmq_inet_ntop((const struct sockaddr*) &address_mask->mask, mask_str);
+
+		offset += snprintf(buffer + offset, size - offset, "%s/%s,", ip_addr_str, mask_str);
+
+		/*struct sockaddr_in addr4;
+		addr4.sin_family = AF_INET;
+
+		addr4.sin_addr.s_addr = offloaded_addresses[i].ip_addr;
+		_loopkb_nmq_inet_ntop((const struct sockaddr*) &addr4, ip_addr_str);
+
+		addr4.sin_addr.s_addr = offloaded_addresses[i].mask;
+		_loopkb_nmq_inet_ntop((const struct sockaddr*) &addr4, mask_str);*/
+	}
+
+	if (offset - 1 < (int) size && offset > 0)
+	{
+		buffer[offset - 1] = '\0';
+	}
+
+	return buffer;
+}
+
 int _loopkb_banner(FILE* fp)
 {
 	int column_width = 20;
+
+	size_t offload_socket_buffer_size = 2048;
+	char offload_socket_buffer[2048];
 
 	int retval = 0;
 	retval += fprintf(fp, "============================\n");
@@ -294,58 +323,65 @@ int _loopkb_banner(FILE* fp)
 	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_PACKET_SIZE", column_width, loopkb_packet_size);
 	retval += fprintf(fp, "%-*s = %-*zu\n", column_width, "LOOPKB_MAX_SOCKETS", column_width, loopkb_max_sockets);
 	retval += fprintf(fp, "%-*s = %-*s\n", column_width, "LOOPKB_SOCKET_DIR", column_width, loopkb_socket_dir);
+	retval += fprintf(fp, "%-*s = %-*s\n", column_width, "LOOPKB_OFFLOAD_ADDR", column_width, _loopkb_offloaded_addresses_to_str(offloaded_addresses, offloaded_addresses_count, offload_socket_buffer, offload_socket_buffer_size));
 	retval += fprintf(fp, "============================\n");
 	return retval;
 }
 
-int _loopkb_parse_offloaded_addresses(const char* env_variable, int domain)
+int _loopkb_parse_offloaded_addresses(const char* offloaded_addresses_string)
 {
 	size_t count = 0;
-	__uint128_t ip_addr;
-	__uint128_t mask;
+	__uint128_t ip_addr6;
+	__uint128_t mask6;
+	uint32_t ip_addr4;
+	uint32_t mask4;
 
-	if (getenv(env_variable) != NULL)
+	char* s = strdup(offloaded_addresses_string);
+
+	char* token = strtok(s, ",");
+	while (token)
 	{
-		char* s = strdup(getenv(env_variable));
-		char* token = strtok(s, ",");
-		while (token)
+		char* slash = strchr(token, '/');
+		if (slash)
 		{
-			char* slash = strchr(token, '/');
-			if (slash)
-			{
-				*slash = '\0';
-				const char* ip = token;
-				const char* netmask = slash + 1;
+			*slash = '\0';
+			const char* ip_addr = token;
+			const char* mask = slash + 1;
 
-				if (1 == inet_pton(domain, ip, &ip_addr) && 1 == inet_pton(domain, netmask, &mask))
-				{
-					__loopkb_log(log_level_trace, "%s: Offloading address: %s/%s", env_variable, ip, netmask);
-					if (domain == AF_INET)
-					{
-						struct ipv4_address_mask_t* ipv4_address_mask = &ipv4_offloaded_addresses[ipv4_offloaded_addresses_count];
-						memcpy(&ipv4_address_mask->ip_addr, &ip_addr, sizeof(ipv4_address_mask->ip_addr));
-						memcpy(&ipv4_address_mask->mask, &mask, sizeof(ipv4_address_mask->mask));
-						++ipv4_offloaded_addresses_count;
-						++count;
-					}
-					else if (domain == AF_INET6)
-					{
-						struct ipv6_address_mask_t* ipv6_address_mask = &ipv6_offloaded_addresses[ipv6_offloaded_addresses_count];
-						memcpy(&ipv6_address_mask->ip_addr, &ip_addr, sizeof(ipv6_address_mask->ip_addr));
-						memcpy(&ipv6_address_mask->mask, &mask, sizeof(ipv6_address_mask->mask));
-						++ipv6_offloaded_addresses_count;
-						++count;
-					}
-				}
-				else
-				{
-					__loopkb_log(log_level_error, "%s: Error offloading address: %s/%s", env_variable, ip, netmask);
-				}
+			if (1 == inet_pton(AF_INET6, ip_addr, &ip_addr6) && 1 == inet_pton(AF_INET6, mask, &mask6))
+			{
+				__loopkb_log(log_level_trace, "_loopkb_parse_offloaded_addresses: Offloading address (ipv6): %s/%s", ip_addr, mask);
+				struct address_mask_t* address_mask = &offloaded_addresses[offloaded_addresses_count];
+
+				address_mask->addr6.sin6_family = AF_INET6;
+				address_mask->mask6.sin6_family = AF_INET6;
+				memcpy(&address_mask->addr6.sin6_addr.s6_addr, &ip_addr6, sizeof(address_mask->addr6.sin6_addr));
+				memcpy(&address_mask->mask6.sin6_addr.s6_addr, &mask6, sizeof(address_mask->mask6.sin6_addr));
+
+				++offloaded_addresses_count;
+				++count;
 			}
-			token = strtok(NULL, ",");
+			else if (1 == inet_pton(AF_INET, ip_addr, &ip_addr4) && 1 == inet_pton(AF_INET, mask, &mask4))
+			{
+				__loopkb_log(log_level_trace, "_loopkb_parse_offloaded_addresses: Offloading address (ipv4): %s/%s", ip_addr, mask);
+				struct address_mask_t* address_mask = &offloaded_addresses[offloaded_addresses_count];
+
+				address_mask->addr4.sin_family = AF_INET;
+				address_mask->mask4.sin_family = AF_INET;
+				address_mask->addr4.sin_addr.s_addr = ip_addr4;
+				address_mask->mask4.sin_addr.s_addr = mask4;
+
+				++offloaded_addresses_count;
+				++count;
+			}
+			else
+			{
+				__loopkb_log(log_level_error, "_loopkb_parse_offloaded_addresses: Error offloading address: %s/%s", ip_addr, mask);
+			}
 		}
-		free(s);
+		token = strtok(NULL, ",");
 	}
+	free(s);
 
 	return count;
 }

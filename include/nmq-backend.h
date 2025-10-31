@@ -28,22 +28,7 @@
 #include <sys/socket.h>
 #include <time.h>
 
-struct socket_info_t
-{
-	union
-	{
-		struct sockaddr addr_1;
-		struct sockaddr_in6 addr6_1; // Largest member
-		struct sockaddr_in addr4_1;
-	};
-	union
-	{
-		struct sockaddr addr_2;
-		struct sockaddr_in6 addr6_2; // Largest member
-		struct sockaddr_in addr4_2;
-	};
-	int protocol;
-};
+#include "defs.h"
 
 enum socket_type_t
 {
@@ -54,29 +39,9 @@ enum socket_type_t
 	unknown = UINT8_MAX,
 };
 
-struct ipv4_address_mask_t
-{
-	uint32_t ip_addr;
-	uint32_t mask;
-};
-
-struct ipv6_address_mask_t
-{
-	__uint128_t ip_addr;
-	__uint128_t mask;
-};
-
-extern size_t ipv4_offloaded_addresses_count;
-extern struct ipv4_address_mask_t ipv4_offloaded_addresses[32];
-
-extern size_t ipv6_offloaded_addresses_count;
-extern struct ipv6_address_mask_t ipv6_offloaded_addresses[32];
-
 const char* _loopkb_nmq_generate_filename_for_socket(int sockfd, struct socket_info_t* socket_info, int type, char* buffer, size_t len);
-bool _loopkb_nmq_should_offload_ipv4(const struct ipv4_address_mask_t* addresses, size_t addresses_len, uint32_t ip_addr);
-bool _loopkb_nmq_should_offload_ipv4_connection(const struct ipv4_address_mask_t* addresses, size_t addresses_len, uint32_t ip_addr_1, uint32_t ip_addr_2);
-bool _loopkb_nmq_should_offload_ipv6(const struct ipv6_address_mask_t* addresses, size_t addresses_len, __uint128_t ip_addr);
-bool _loopkb_nmq_should_offload_ipv6_connection(const struct ipv6_address_mask_t* addresses, size_t addresses_len, __uint128_t ip_addr_1, __uint128_t ip_addr_2);
+bool _loopkb_nmq_should_offload(const struct address_mask_t* addresses, size_t addresses_len, const struct sockaddr* ip_addr);
+bool _loopkb_nmq_should_offload_connection(const struct address_mask_t* addresses, size_t addresses_len, const struct sockaddr* ip_addr_1, const struct sockaddr* ip_addr_2);
 char* _loopkb_nmq_inet_ntop(const struct sockaddr* addr, char* retval);
 int _loopkb_nmq_socket(int sockfd, int domain, int type, int protocol);
 int _loopkb_nmq_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);

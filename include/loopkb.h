@@ -27,6 +27,8 @@
 #include <sys/socket.h>
 #include <time.h>
 
+#include "defs.h"
+
 #define LOOPKB_PACKET_SIZE_MAX 1500U
 
 #define LOOPKB_OFFLOADED_SOCKET_HAD_ERRORS -2
@@ -61,7 +63,7 @@ typedef int (*fcntl64_function_t)(int fd, int op, ...);
 typedef int (*sigaction_function_t)(int signum, const struct sigaction* act, struct sigaction* oldact);
 
 int _loopkb_banner(FILE* fp);
-int _loopkb_parse_offloaded_addresses(const char* env_variable, int domain);
+int _loopkb_parse_offloaded_addresses(const char* offloaded_addresses_string);
 
 int _loopkb_socket(int domain, int type, int protocol);
 int _loopkb_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
@@ -96,6 +98,8 @@ extern size_t loopkb_ring_size;
 extern size_t loopkb_packet_size;
 extern size_t loopkb_offloaded_packet_size;
 extern size_t loopkb_max_sockets;
+extern size_t offloaded_addresses_count;
+extern struct address_mask_t offloaded_addresses[32];
 
 // Override functions
 extern socket_function_t _sys_socket;
