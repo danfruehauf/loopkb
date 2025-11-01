@@ -29,9 +29,14 @@ jobs:
       - name: Install dependencies (Rocky or Ubuntu)
         run: |
           if [ -f /etc/redhat-release ]; then
-            dnf -y install dnf-plugins-core
-            dnf config-manager --set-enabled crb
-            dnf -y install epel-release
+            DISTRO_ID=$(source /etc/os-release && echo "$ID")
+
+            if [[ "$DISTRO_ID" == "rocky" ]] || [[ "$DISTRO_ID" == "almalinux" ]] || [[ "$DISTRO_ID" == "rhel" ]]; then
+              dnf -y install dnf-plugins-core
+              dnf config-manager --set-enabled crb || true
+              dnf -y install epel-release
+            fi
+
             dnf -y update
             dnf -y install cmake gcc gcc-c++ make CUnit-devel
           else
