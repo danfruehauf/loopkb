@@ -1,0 +1,51 @@
+---
+name: Build - Common
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: "Runner OS"
+        required: true
+        type: string
+      container_image:
+        description: "Optional container image (for Rocky)"
+        required: false
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.os }}
+    container: ${{ inputs.container_image || null }}
+
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Rocky or Ubuntu)
+        run: |
+          if [ -f /etc/redhat-release ]; then
+            dnf -y install dnf-plugins-core
+            dnf config-manager --set-enabled crb
+            dnf -y install epel-release
+            dnf -y update
+            dnf -y install cmake gcc gcc-c++ make CUnit-devel
+          else
+            sudo apt-get update
+            sudo apt-get install -y cmake gcc g++ make libcunit1-dev
+          fi
+
+      - name: Configure and build (${{ matrix.build_type }})
+        run: |
+          mkdir -p build-${{ matrix.build_type }}
+          cd build-${{ matrix.build_type }}
+          cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ..
+          cmake --build .
+
+      - name: Run tests (${{ matrix.build_type }})
+        working-directory: build-${{ matrix.build_type }}
+        run: ctest --output-on-failure
