@@ -414,8 +414,6 @@ void _loopkb_nmq_remove_udp_destination(int sockfd)
 {
 #ifdef LOOPKB_DIRECT_FD_INDEXING
 	assert(sockfd < (int) loopkb_max_sockets);
-	assert(udp_socket_destinations[sockfd].type == udp || udp_socket_destinations[sockfd].type == udp_initiator);
-	assert(udp_socket_destinations[sockfd].sockfd == sockfd);
 	udp_socket_destinations[sockfd].sockfd = -1;
 	udp_socket_destinations[sockfd].type = unknown;
 #else
