@@ -39,9 +39,10 @@ jobs:
 
             dnf -y update
             dnf -y install cmake gcc gcc-c++ make CUnit-devel
+            dnf -y install sockperf || true
           else
             sudo apt-get update
-            sudo apt-get install -y cmake gcc g++ make libcunit1-dev
+            sudo apt-get install -y cmake gcc g++ make libcunit1-dev sockperf
           fi
 
       - name: Configure and build (${{ matrix.build_type }})
@@ -54,3 +55,19 @@ jobs:
       - name: Run tests (${{ matrix.build_type }})
         working-directory: build-${{ matrix.build_type }}
         run: ctest --output-on-failure
+
+      - name: Run sockperf test (${{ matrix.build_type }})
+        run: |
+          if ! command -v sockperf >/dev/null 2>&1; then
+            echo "sockperf not found — skipping sockperf test phase"
+            exit 0
+          fi
+
+          echo "sockperf without loopkb:"
+          echo "------------------------"
+          test/test-sockperf.sh
+          echo "------------------------"
+          echo "sockperf with loopkb:"
+          echo "---------------------"
+          LD_PRELOAD=build-${{ matrix.build_type }}/libloopkb.so test/test-sockperf.sh
+          echo "---------------------"
