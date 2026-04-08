@@ -97,13 +97,15 @@ struct context_t* context_create(struct context_t* context_, const char* fname, 
 	unsigned int file_size = sizeof(struct header) + sizeof(struct ring) * n_rings + n_rings * real_size * msg_size;
 
 	if (ftruncate(fd, file_size) == -1)
+	{
+		close(fd);
 		return NULL;
+	}
 
 	context_->p_ = mmap(NULL, file_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	close(fd);
 	if (context_->p_ == NULL)
 		return NULL;
-
-	close(fd);
 	memset(context_->p_, 0, file_size);
 
 	context_->header_ = (struct header*) context_->p_;
@@ -134,15 +136,22 @@ struct context_t* context_open(struct context_t* context_, const char* fname, un
 
 	struct stat buf;
 	if (fstat(fd, &buf) == -1)
+	{
+		close(fd);
 		return NULL;
+	}
 
 	unsigned int file_size = buf.st_size;
 	context_->size_ = file_size;
 
 	if (ftruncate(fd, file_size) == -1)
+	{
+		close(fd);
 		return NULL;
+	}
 
 	context_->p_ = mmap(NULL, file_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	close(fd);
 	if (context_->p_ == NULL)
 		return NULL;
 
