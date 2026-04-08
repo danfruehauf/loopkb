@@ -156,6 +156,11 @@ static void _loopkb_nmq_init()
 	{
 		__loopkb_log(log_level_trace, "Allocating socket_file_map: %zu bytes", sizeof(struct offloaded_socket_t) * loopkb_max_sockets);
 		socket_file_map = malloc(sizeof(struct offloaded_socket_t) * loopkb_max_sockets);
+		if (NULL == socket_file_map)
+		{
+			__loopkb_log(log_level_error, "_loopkb_nmq_init: Failed to allocate socket_file_map");
+			return;
+		}
 	}
 
 	for (size_t i = 0; i < loopkb_max_sockets; ++i)
@@ -170,6 +175,11 @@ static void _loopkb_nmq_init()
 	{
 		__loopkb_log(log_level_trace, "Allocating udp_socket_destinations: %zu bytes", sizeof(struct offloaded_socket_t) * loopkb_max_sockets);
 		udp_socket_destinations = malloc(sizeof(struct offloaded_socket_t) * loopkb_max_sockets);
+		if (NULL == udp_socket_destinations)
+		{
+			__loopkb_log(log_level_error, "_loopkb_nmq_init: Failed to allocate udp_socket_destinations");
+			return;
+		}
 	}
 
 	for (size_t i = 0; i < loopkb_max_sockets; ++i)
@@ -369,7 +379,7 @@ const char* _loopkb_nmq_generate_filename_for_socket(int sockfd, struct socket_i
 	int offset = 0;
 	if (strlen(loopkb_socket_dir) > 0)
 	{
-		offset = sprintf(buffer, "%s/", loopkb_socket_dir);
+		offset = snprintf(buffer, len, "%s/", loopkb_socket_dir);
 	}
 
 	if (socket_info->addr_1.sa_family != AF_INET && socket_info->addr_1.sa_family != AF_INET6)
@@ -381,7 +391,7 @@ const char* _loopkb_nmq_generate_filename_for_socket(int sockfd, struct socket_i
 	const char* protocol_str = socket_info->protocol == SOCK_STREAM ? "tcp" : socket_info->protocol == SOCK_DGRAM ? "udp" : "unknown";
 	const char* domain_str = socket_info->addr_1.sa_family == AF_INET ? "ipv4" : socket_info->addr_1.sa_family == AF_INET6 ? "ipv6" : "unknown";
 
-	snprintf(buffer + offset, len, LOOPKB_FILE_PREFIX "%s.%s.%s:%d:%s:%d", domain_str, protocol_str, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
+	snprintf(buffer + offset, len - offset, LOOPKB_FILE_PREFIX "%s.%s.%s:%d:%s:%d", domain_str, protocol_str, ip_addr_1_str, port_1, ip_addr_2_str, port_2);
 
 	__loopkb_log(log_level_debug, "_loopkb_nmq_generate_filename_for_socket: Socket %d will use filename %s", sockfd, buffer);
 	return buffer;
@@ -515,6 +525,11 @@ int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_in
 	assert(socket_file_map[index].context == NULL);
 	assert(socket_file_map[index].type == unknown);
 	socket_file_map[index].context = malloc(sizeof(struct context_t));
+	if (NULL == socket_file_map[index].context)
+	{
+		__loopkb_log(log_level_error, "_loopkb_nmq_add_offloaded_socket: Failed to allocate context for socket %d", sockfd);
+		return -1;
+	}
 	socket_file_map[index].type = type;
 	memcpy(&socket_file_map[index].addr6, &socket_info->addr6_1, sizeof(socket_file_map[index].addr6));
 
@@ -529,6 +544,8 @@ int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_in
 		if (context_create(socket_file_map[index].context, filename, total_channels_tcp, loopkb_ring_size, loopkb_offloaded_packet_size) == NULL)
 		{
 			__loopkb_log(log_level_error, "_loopkb_nmq_add_offloaded_socket: Error creating context %s", strerror(errno));
+			free(socket_file_map[index].context);
+			socket_file_map[index].context = NULL;
 			return -1;
 		}
 	}
@@ -539,7 +556,7 @@ int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_in
 		while (fd == -1)
 		{
 			__loopkb_log(log_level_debug, "_loopkb_nmq_add_offloaded_socket: Waiting for file to become ready at %s...", filename);
-			usleep(1000000); // 1ms
+			usleep(1000000); // 1s
 			fd = open(filename, O_RDWR);
 		}
 		_sys_close(fd);
@@ -547,6 +564,8 @@ int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_in
 		if (context_open(socket_file_map[index].context, filename, total_channels_tcp, loopkb_ring_size, loopkb_offloaded_packet_size) == NULL)
 		{
 			__loopkb_log(log_level_error, "_loopkb_nmq_add_offloaded_socket: Cannot open context %s: %s", filename, strerror(errno));
+			free(socket_file_map[index].context);
+			socket_file_map[index].context = NULL;
 			return -1;
 		}
 	}
@@ -564,6 +583,8 @@ int _loopkb_nmq_add_offloaded_socket(int sockfd, struct socket_info_t* socket_in
 		if (context_create(socket_file_map[index].context, filename, total_channels_udp, loopkb_ring_size, loopkb_packet_size) == NULL)
 		{
 			__loopkb_log(log_level_error, "_loopkb_nmq_add_offloaded_socket: Error creating context %s", strerror(errno));
+			free(socket_file_map[index].context);
+			socket_file_map[index].context = NULL;
 			return -1;
 		}
 		socket_file_map[index].type = udp_initiator;
@@ -697,14 +718,20 @@ struct context_t* _loopkb_nmq_get_context_for_address_dgram(int sockfd, const st
 	if (fd < 0)
 	{
 		__loopkb_log(log_level_error, "_loopkb_nmq_get_context_for_address_dgram: Could not open context file %s", filename);
-		_sys_close(fd);
 		return NULL;
 	}
+	_sys_close(fd);
 
 	context = malloc(sizeof(struct context_t));
+	if (NULL == context)
+	{
+		__loopkb_log(log_level_error, "_loopkb_nmq_get_context_for_address_dgram: Failed to allocate context for %s", filename);
+		return NULL;
+	}
 	if (context_open(context, filename, total_channels_udp, loopkb_ring_size, loopkb_packet_size) == NULL)
 	{
 		__loopkb_log(log_level_error, "_loopkb_nmq_get_context_for_address_dgram: Cannot open context %s: %s", filename, strerror(errno));
+		free(context);
 		return NULL;
 	}
 
@@ -751,7 +778,7 @@ bool _loopkb_nmq_should_offload(const struct address_mask_t* addresses, size_t a
 
 			__m128i ip_addr_128, ip_addr_2_128, mask_128;
 			memcpy(&ip_addr_128, ip_addr6_2->sin6_addr.s6_addr, sizeof(__m128i));
-			memcpy(&ip_addr_2_128, ip_addr6_2->sin6_addr.s6_addr, sizeof(__m128i));
+			memcpy(&ip_addr_2_128, ip_addr6->sin6_addr.s6_addr, sizeof(__m128i));
 			memcpy(&mask_128, mask6->sin6_addr.s6_addr, sizeof(__m128i));
 
 			__m128i ip_addr_after_mask = _mm_and_si128(ip_addr_128, mask_128);;

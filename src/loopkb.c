@@ -145,31 +145,31 @@ static void _loopkb_init()
 		{
 			loopkb_log_level_stdout = log_level_error;
 			loopkb_log_level_stderr = log_level_error;
-			strcpy(loopkb_log_level, loopkb_log_level_);
+			strncpy(loopkb_log_level, loopkb_log_level_, sizeof(loopkb_log_level) - 1);
 		}
 		else if (strncasecmp(loopkb_log_level_, "warn", 4) == 0)
 		{
 			loopkb_log_level_stdout = log_level_warning;
 			loopkb_log_level_stderr = log_level_warning;
-			strcpy(loopkb_log_level, loopkb_log_level_);
+			strncpy(loopkb_log_level, loopkb_log_level_, sizeof(loopkb_log_level) - 1);
 		}
 		else if (strncasecmp(loopkb_log_level_, "info", 4) == 0)
 		{
 			loopkb_log_level_stdout = log_level_info;
 			loopkb_log_level_stderr = log_level_info;
-			strcpy(loopkb_log_level, loopkb_log_level_);
+			strncpy(loopkb_log_level, loopkb_log_level_, sizeof(loopkb_log_level) - 1);
 		}
 		else if (strncasecmp(loopkb_log_level_, "debug", 5) == 0)
 		{
 			loopkb_log_level_stdout = log_level_debug;
 			loopkb_log_level_stderr = log_level_debug;
-			strcpy(loopkb_log_level, loopkb_log_level_);
+			strncpy(loopkb_log_level, loopkb_log_level_, sizeof(loopkb_log_level) - 1);
 		}
 		else if (strncasecmp(loopkb_log_level_, "trace", 5) == 0)
 		{
 			loopkb_log_level_stdout = log_level_trace;
 			loopkb_log_level_stderr = log_level_trace;
-			strcpy(loopkb_log_level, loopkb_log_level_);
+			strncpy(loopkb_log_level, loopkb_log_level_, sizeof(loopkb_log_level) - 1);
 		}
 		else
 		{
@@ -337,6 +337,11 @@ int _loopkb_parse_offloaded_addresses(const char* offloaded_addresses_string)
 	uint32_t mask4;
 
 	char* s = strdup(offloaded_addresses_string);
+	if (NULL == s)
+	{
+		__loopkb_log(log_level_error, "_loopkb_parse_offloaded_addresses: strdup failed");
+		return 0;
+	}
 
 	char* token = strtok(s, ",");
 	while (token)
