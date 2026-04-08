@@ -106,6 +106,11 @@ struct context_t* context_create(struct context_t* context_, const char* fname, 
 	close(fd);
 	if (context_->p_ == NULL)
 		return NULL;
+
+	context_->size_ = file_size;
+#ifdef MADV_HUGEPAGE
+	madvise(context_->p_, file_size, MADV_HUGEPAGE);
+#endif
 	memset(context_->p_, 0, file_size);
 
 	context_->header_ = (struct header*) context_->p_;
@@ -154,6 +159,10 @@ struct context_t* context_open(struct context_t* context_, const char* fname, un
 	close(fd);
 	if (context_->p_ == NULL)
 		return NULL;
+
+#ifdef MADV_HUGEPAGE
+	madvise(context_->p_, file_size, MADV_HUGEPAGE);
+#endif
 
 	context_->header_ = (struct header*) context_->p_;
 	context_->ring_ = (struct ring*) (context_->header_ + 1);
